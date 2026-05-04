@@ -6,6 +6,7 @@ import {
   CalendarDays,
   DollarSign,
   Loader2,
+  MapPin,
   Plus,
   Sparkles,
   TrendingDown,
@@ -13,43 +14,60 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, XAxis, YAxis } from "recharts";
 
+import { AdminMobileSheet } from "@/components/admin/admin-mobile-sheet";
+import { AppointmentDetailPanel } from "@/components/admin/appointment-detail-panel";
+import { getAppointmentStatusLabel, getStatusColor, type AppointmentMode, type PlannerAppointment } from "@/components/admin/appointment-utils";
 import { useAdminSession } from "@/components/admin/admin-session-provider";
 import {
+  deleteAdminAppointment,
   getAdminAppointments,
+  getAdminClients,
   getAdminMonthlyFinanceSummary,
   getAdminFinanceHistory,
+  updateAdminAppointmentStatus,
 } from "@/lib/api/admin";
 import { ApiError } from "@/lib/api/http";
-import { getHavanaIsoDate, getHavanaMonthKey, getHavanaTime, toHavanaOffsetDateTime } from "@/lib/havana-time";
+import { getHavanaDateTimeParts, getHavanaIsoDate, getHavanaMonthKey, toHavanaOffsetDateTime } from "@/lib/havana-time";
 import type {
   AppointmentResponse,
+  ClientResponse,
   MonthlyFinanceSummaryResponse,
   FinanceHistoryResponse,
 } from "@/lib/api/types";
 
-type DashboardAppointment = {
-  id: string;
-  time: string;
-  client: string;
-  services: string;
-  status: string;
-  rawStatus: string;
-};
+function mapToPlannerAppointment(appointment: AppointmentResponse, client?: ClientResponse): PlannerAppointment {
+  const scheduledStart = getHavanaDateTimeParts(appointment.scheduledStart);
+
+  return {
+    id: appointment.id,
+    clientId: appointment.clientId,
+    client: appointment.clientName,
+    clientPhone: client?.whatsapp ?? client?.phone ?? "",
+    date: scheduledStart.date,
+    time: scheduledStart.time,
+    servicesSummary:
+      appointment.items.map((item) => item.serviceNameSnapshot).join(" + ") || "Servicio sin definir",
+    status: appointment.status,
+    statusLabel: getAppointmentStatusLabel(appointment.status),
+    mode: appointment.appointmentMode === "HOME" ? "HOME" : "STUDIO" as AppointmentMode,
+    addressSnapshot: appointment.addressSnapshot,
+    notes: appointment.notes,
+    travelFee: appointment.travelFee,
+    totalAmount: appointment.totalAmount,
+    durationMinutes: appointment.items.reduce((sum, item) => sum + item.durationSnapshotMinutes, 0),
+    cancelReason: appointment.cancelReason,
+    items: appointment.items,
+  };
+}
 
 type ChartView = "citas" | "dinero";
 
 function formatCurrency(value: number) {
   return `${value.toFixed(0)} CUP`;
-}
-
-function getStatusLabel(status: string) {
-  if (status === "CONFIRMED") return "Confirmada";
-  if (status === "COMPLETED") return "Completada";
-  if (status === "CANCELLED") return "Cancelada";
-  return status;
 }
 
 function getErrorMessage(error: unknown, fallbackMessage: string) {
@@ -77,31 +95,30 @@ const PIE_COLORS = ["var(--chart-income)", "var(--chart-expense)"];
 
 export function AdminHomeDashboard() {
   const { accessToken, refresh, status } = useAdminSession();
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [todayAppointments, setTodayAppointments] = useState<AppointmentResponse[]>([]);
   const [monthAppointments, setMonthAppointments] = useState<AppointmentResponse[]>([]);
   const [summary, setSummary] = useState<MonthlyFinanceSummaryResponse | null>(null);
   const [financeHistory, setFinanceHistory] = useState<FinanceHistoryResponse | null>(null);
+  const [clients, setClients] = useState<ClientResponse[]>([]);
   const [chartView, setChartView] = useState<ChartView>("citas");
+  const [detailAppointment, setDetailAppointment] = useState<PlannerAppointment | null>(null);
+  const [detailCancelReason, setDetailCancelReason] = useState("");
+  const [detailIsSubmitting, setDetailIsSubmitting] = useState(false);
 
   const todayIsoDate = useMemo(() => getHavanaIsoDate(), []);
   const monthKey = useMemo(() => getHavanaMonthKey(), []);
 
-  const appointments = useMemo<DashboardAppointment[]>(
+  const clientsById = useMemo(() => new Map(clients.map((c) => [c.id, c])), [clients]);
+
+  const appointments = useMemo<PlannerAppointment[]>(
     () =>
       todayAppointments
-        .map((appointment) => ({
-          id: appointment.id,
-          time: getHavanaTime(appointment.scheduledStart),
-          client: appointment.clientName,
-          services:
-            appointment.items.map((item) => item.serviceNameSnapshot).join(" + ") || "Servicio sin definir",
-          status: getStatusLabel(appointment.status),
-          rawStatus: appointment.status,
-        }))
+        .map((a) => mapToPlannerAppointment(a, clientsById.get(a.clientId)))
         .sort((left, right) => left.time.localeCompare(right.time)),
-    [todayAppointments],
+    [todayAppointments, clientsById],
   );
 
   const todayConfirmedCount = useMemo(
@@ -198,14 +215,15 @@ export function AdminHomeDashboard() {
       setIsLoading(true);
       setErrorMessage("");
       try {
-        const [nextToday, nextMonth, nextSummary, nextHistory] = await withRefreshedToken<
-          [AppointmentResponse[], AppointmentResponse[], MonthlyFinanceSummaryResponse, FinanceHistoryResponse]
+        const [nextToday, nextMonth, nextSummary, nextHistory, nextClients] = await withRefreshedToken<
+          [AppointmentResponse[], AppointmentResponse[], MonthlyFinanceSummaryResponse, FinanceHistoryResponse, ClientResponse[]]
         >(sessionAccessToken, refresh, (currentAccessToken) =>
           Promise.all([
             getAdminAppointments(currentAccessToken, toHavanaOffsetDateTime(todayIsoDate, "00:00"), toHavanaOffsetDateTime(todayIsoDate, "23:59")),
             getAdminAppointments(currentAccessToken, toHavanaOffsetDateTime(monthStart, "00:00"), toHavanaOffsetDateTime(monthEndIso, "23:59")),
             getAdminMonthlyFinanceSummary(currentAccessToken, Number(monthKey.slice(0, 4)), Number(monthKey.slice(5, 7))),
             getAdminFinanceHistory(currentAccessToken, 6).catch(() => null as unknown as FinanceHistoryResponse),
+            getAdminClients(currentAccessToken),
           ]),
         );
         if (!isMounted) return;
@@ -213,6 +231,7 @@ export function AdminHomeDashboard() {
         setMonthAppointments(nextMonth);
         setSummary(nextSummary);
         setFinanceHistory(nextHistory);
+        setClients(nextClients);
       } catch (error) {
         if (!isMounted) return;
         setErrorMessage(getErrorMessage(error, "No se pudo cargar el resumen admin."));
@@ -225,6 +244,116 @@ export function AdminHomeDashboard() {
     return () => { isMounted = false; };
   }, [accessToken, monthKey, refresh, status, todayIsoDate]);
 
+  function openDetail(appointment: PlannerAppointment) {
+    setDetailAppointment(appointment);
+    setDetailCancelReason(appointment.cancelReason ?? "");
+    setErrorMessage("");
+  }
+
+  function closeDetail() {
+    setDetailAppointment(null);
+    setDetailCancelReason("");
+  }
+
+  async function handleDetailStatusToggle() {
+    if (!accessToken || !detailAppointment) return;
+    const sessionAccessToken = accessToken;
+
+    const nextStatus =
+      detailAppointment.status === "CANCELLED"
+        ? "CONFIRMED"
+        : detailAppointment.status === "COMPLETED"
+          ? "CONFIRMED"
+          : "COMPLETED";
+
+    setDetailIsSubmitting(true);
+    setErrorMessage("");
+
+    try {
+      await withRefreshedToken(sessionAccessToken, refresh, async (currentAccessToken) => {
+        await updateAdminAppointmentStatus(currentAccessToken, detailAppointment.id, {
+          status: nextStatus,
+          cancelReason: null,
+        });
+        const [nextToday] = await Promise.all([
+          getAdminAppointments(currentAccessToken, toHavanaOffsetDateTime(todayIsoDate, "00:00"), toHavanaOffsetDateTime(todayIsoDate, "23:59")),
+        ]);
+        setTodayAppointments(nextToday);
+        const updatedRaw = nextToday.find((a) => a.id === detailAppointment.id);
+        if (updatedRaw) {
+          setDetailAppointment(mapToPlannerAppointment(updatedRaw, clientsById.get(updatedRaw.clientId)));
+        }
+      });
+    } catch {
+      setErrorMessage("No se pudo actualizar el estado de la cita.");
+    } finally {
+      setDetailIsSubmitting(false);
+    }
+  }
+
+  async function handleDetailDelete() {
+    if (!accessToken || !detailAppointment) return;
+    const sessionAccessToken = accessToken;
+
+    setDetailIsSubmitting(true);
+    setErrorMessage("");
+
+    try {
+      await withRefreshedToken(sessionAccessToken, refresh, async (currentAccessToken) => {
+        await deleteAdminAppointment(currentAccessToken, detailAppointment.id);
+        const [nextToday] = await Promise.all([
+          getAdminAppointments(currentAccessToken, toHavanaOffsetDateTime(todayIsoDate, "00:00"), toHavanaOffsetDateTime(todayIsoDate, "23:59")),
+        ]);
+        setTodayAppointments(nextToday);
+      });
+      setDetailAppointment(null);
+      setDetailCancelReason("");
+    } catch {
+      setErrorMessage("No se pudo eliminar la cita.");
+    } finally {
+      setDetailIsSubmitting(false);
+    }
+  }
+
+  async function handleDetailCancel() {
+    if (!accessToken || !detailAppointment) return;
+    const sessionAccessToken = accessToken;
+
+    if (!detailCancelReason.trim()) {
+      setErrorMessage("Debes indicar el motivo de cancelacion.");
+      return;
+    }
+
+    setDetailIsSubmitting(true);
+    setErrorMessage("");
+
+    try {
+      await withRefreshedToken(sessionAccessToken, refresh, async (currentAccessToken) => {
+        await updateAdminAppointmentStatus(currentAccessToken, detailAppointment.id, {
+          status: "CANCELLED",
+          cancelReason: detailCancelReason.trim(),
+        });
+        const [nextToday] = await Promise.all([
+          getAdminAppointments(currentAccessToken, toHavanaOffsetDateTime(todayIsoDate, "00:00"), toHavanaOffsetDateTime(todayIsoDate, "23:59")),
+        ]);
+        setTodayAppointments(nextToday);
+        const updatedRaw = nextToday.find((a) => a.id === detailAppointment.id);
+        if (updatedRaw) {
+          setDetailAppointment(mapToPlannerAppointment(updatedRaw, clientsById.get(updatedRaw.clientId)));
+        }
+      });
+    } catch {
+      setErrorMessage("No se pudo cancelar la cita.");
+    } finally {
+      setDetailIsSubmitting(false);
+    }
+  }
+
+  function handleDetailEdit() {
+    if (!detailAppointment) return;
+    router.push(`/admin/citas?date=${detailAppointment.date}&appointmentId=${detailAppointment.id}`);
+  }
+
   if (status === "loading" || isLoading) {
     return (
       <div className="flex items-center gap-3 rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-6">
@@ -235,6 +364,7 @@ export function AdminHomeDashboard() {
   }
 
   return (
+    <>
     <main className="min-w-0 grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
       <section className="min-w-0 space-y-4">
         <article className="overflow-hidden rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] sm:rounded-[2rem]">
@@ -279,20 +409,33 @@ export function AdminHomeDashboard() {
           <div className="mt-4 space-y-2">
             {appointments.length ? (
               appointments.map((appointment) => (
-                <article key={appointment.id} className="rounded-[1.2rem] bg-[var(--surface-muted)] p-3.5 sm:p-4">
+                <button
+                  key={appointment.id}
+                  className="block w-full rounded-[1.2rem] bg-[var(--surface-muted)] p-3.5 text-left transition hover:bg-[var(--secondary-btn)] sm:p-4"
+                  type="button"
+                  onClick={() => openDetail(appointment)}
+                >
                   <div className="flex items-start gap-3">
                     <div className="flex shrink-0 flex-col items-center rounded-xl bg-[var(--surface)] px-2.5 py-1.5">
                       <span className="text-base font-bold tabular-nums text-[var(--accent)] sm:text-lg">{appointment.time}</span>
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-[var(--text)]">{appointment.client}</p>
-                      <p className="mt-0.5 truncate text-xs text-[var(--text-muted)]">{appointment.services}</p>
+                      <p className="mt-0.5 truncate text-xs text-[var(--text-muted)]">{appointment.servicesSummary}</p>
                     </div>
-                    <span className="shrink-0 rounded-full bg-[var(--surface)] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
-                      {appointment.status}
-                    </span>
+                    <div className="shrink-0 text-right">
+                      <span
+                        className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${getStatusColor(appointment.status)}`}
+                      >
+                        {appointment.statusLabel}
+                      </span>
+                      <div className="mt-1.5 flex items-center justify-end gap-1 text-[10px] font-medium text-[var(--text-subtle)]">
+                        <MapPin className="h-3 w-3" />
+                        {appointment.mode}
+                      </div>
+                    </div>
                   </div>
-                </article>
+                </button>
               ))
             ) : (
               <div className="flex flex-col items-center justify-center gap-2 rounded-[1.2rem] bg-[var(--surface-muted)] py-8">
@@ -498,5 +641,22 @@ export function AdminHomeDashboard() {
         </article>
       </section>
     </main>
+
+    <AdminMobileSheet open={detailAppointment !== null} onClose={closeDetail}>
+      {detailAppointment ? (
+        <AppointmentDetailPanel
+          appointment={detailAppointment}
+          cancelReason={detailCancelReason}
+          setCancelReason={setDetailCancelReason}
+          isSubmitting={detailIsSubmitting}
+          onClose={closeDetail}
+          onCompleteToggle={() => void handleDetailStatusToggle()}
+          onEdit={handleDetailEdit}
+          onDelete={() => void handleDetailDelete()}
+          onCancel={() => void handleDetailCancel()}
+        />
+      ) : null}
+    </AdminMobileSheet>
+    </>
   );
 }
