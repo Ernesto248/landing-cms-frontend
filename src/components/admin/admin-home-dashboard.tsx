@@ -7,6 +7,7 @@ import {
   DollarSign,
   Loader2,
   Plus,
+  Sparkles,
   TrendingDown,
   TrendingUp,
   Users,
@@ -236,6 +237,25 @@ export function AdminHomeDashboard() {
   return (
     <main className="min-w-0 grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
       <section className="min-w-0 space-y-4">
+        <article className="overflow-hidden rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] sm:rounded-[2rem]">
+          <div className="flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between lg:gap-6 lg:p-6">
+            <div className="min-w-0 space-y-3">
+              <div className="inline-flex items-center gap-2 rounded-full border border-[color:color-mix(in_srgb,var(--accent)_20%,transparent)] bg-[color:color-mix(in_srgb,var(--accent)_10%,transparent)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--accent)] sm:text-xs">
+                <Sparkles className="h-3.5 w-3.5" />
+                Panel administrativo
+              </div>
+              <div>
+                <h1 className="text-2xl font-semibold tracking-[-0.05em] text-[var(--text)] sm:text-3xl">
+                  Jeni&apos;s Lashes &amp; Brows
+                </h1>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-muted)]">
+                  Gestiona citas, contenido y finanzas desde un espacio mas claro y enfocado.
+                </p>
+              </div>
+            </div>
+          </div>
+        </article>
+
         <article className="min-w-0 overflow-hidden rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-4 sm:rounded-[2rem] sm:p-5">
           <div className="flex items-center justify-between gap-3">
             <div>
