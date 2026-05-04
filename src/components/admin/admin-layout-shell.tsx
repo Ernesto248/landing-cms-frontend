@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
-import { LogOut, Plus, User } from "lucide-react";
+import { Sparkles, User } from "lucide-react";
 
 import { AdminNavigation } from "@/components/admin/admin-navigation";
 import { useAdminSession } from "@/components/admin/admin-session-provider";
@@ -12,7 +11,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 export function AdminLayoutShell({ children }: Readonly<{ children: React.ReactNode }>) {
   const pathname = usePathname();
   const router = useRouter();
-  const { logout, status, user } = useAdminSession();
+  const { status, user } = useAdminSession();
   const isLoginRoute = pathname === "/admin/login";
 
   useEffect(() => {
@@ -49,50 +48,36 @@ export function AdminLayoutShell({ children }: Readonly<{ children: React.ReactN
           <AdminNavigation />
 
           <div className="min-w-0 space-y-4 pb-32 lg:pb-0">
-            <header className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-4 sm:rounded-[2rem] sm:p-5 sm:p-6">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent)] sm:text-sm">
-                    Admin conectado
-                  </p>
-                  <h1 className="mt-1.5 text-2xl font-semibold tracking-[-0.05em] text-[var(--text)] sm:mt-2 sm:text-3xl">
-                    Jeni&apos;s Lashes &amp; Brows
-                  </h1>
-                  <p className="mt-1.5 text-xs leading-6 text-[var(--text-muted)] sm:mt-2 sm:text-sm lg:hidden">
-                    Gestiona citas, contenido y finanzas
-                  </p>
+            <header className="overflow-hidden rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] sm:rounded-[2rem]">
+              <div className="flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between lg:gap-6 lg:p-6">
+                <div className="min-w-0 space-y-3">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-[color:color-mix(in_srgb,var(--accent)_20%,transparent)] bg-[color:color-mix(in_srgb,var(--accent)_10%,transparent)] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--accent)] sm:text-xs">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Panel administrativo
+                  </div>
+                  <div>
+                    <h1 className="text-2xl font-semibold tracking-[-0.05em] text-[var(--text)] sm:text-3xl">
+                      Jeni&apos;s Lashes &amp; Brows
+                    </h1>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-muted)]">
+                      Gestiona citas, contenido y finanzas desde un espacio mas claro y enfocado.
+                    </p>
+                  </div>
                 </div>
 
-                <div className="flex flex-row items-center gap-2 sm:flex-col sm:items-end sm:gap-3">
-                  <div className="flex items-center gap-2 rounded-2xl bg-[var(--surface-muted)] px-3 py-2.5 text-sm sm:px-4 sm:py-3">
-                    <User className="h-4 w-4 text-[var(--text-muted)]" />
+                <div className="flex items-center justify-between gap-3 rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface-muted)] p-3 sm:p-4 lg:min-w-[18rem] lg:justify-end">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--surface)] text-[var(--accent)] shadow-sm">
+                      <User className="h-5 w-5" />
+                    </div>
                     <div className="min-w-0">
-                      <p className="truncate font-semibold">{user?.fullName}</p>
-                      <p className="hidden text-xs uppercase tracking-[0.16em] text-[var(--text-muted)] sm:block">
+                      <p className="truncate text-sm font-semibold text-[var(--text)]">{user?.fullName}</p>
+                      <p className="truncate text-xs uppercase tracking-[0.16em] text-[var(--text-muted)]">
                         {user?.role}
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <ThemeToggle />
-                    <Link
-                      className="inline-flex h-10 items-center gap-2 rounded-2xl bg-[var(--accent)] px-4 text-xs font-semibold text-white transition hover:bg-[var(--accent-hover)] sm:h-11 sm:px-5 sm:text-sm"
-                      href="/admin/citas"
-                    >
-                      <Plus className="h-4 w-4" />
-                      <span className="hidden sm:inline">Crear cita</span>
-                      <span className="sm:hidden">Cita</span>
-                    </Link>
-                    <button
-                      className="inline-flex h-10 items-center gap-2 rounded-2xl bg-[var(--secondary-btn)] px-4 text-xs font-semibold text-[var(--text)] transition hover:bg-[var(--secondary-btn-hover)] sm:h-11 sm:px-5 sm:text-sm"
-                      type="button"
-                      onClick={() => void logout()}
-                    >
-                      <LogOut className="h-4 w-4" />
-                      <span className="hidden sm:inline">Cerrar sesion</span>
-                      <span className="sm:hidden">Salir</span>
-                    </button>
-                  </div>
+                  <ThemeToggle />
                 </div>
               </div>
             </header>
