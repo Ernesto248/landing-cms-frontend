@@ -1,24 +1,42 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
 
+import { AdminMobileSheet } from "@/components/admin/admin-mobile-sheet";
 import { useAdminSession } from "@/components/admin/admin-session-provider";
 import {
   createAdminService,
+  deleteAdminService,
+  getAdminServiceCategoryNames,
   getAdminServices,
   updateAdminService,
+  upsertAdminServiceCategoryNames,
 } from "@/lib/api/admin";
 import { ApiError } from "@/lib/api/http";
 import type { ServiceResponse, UpsertServiceRequest } from "@/lib/api/types";
 import { formatDuration, formatPrice } from "@/lib/site-content";
 
-const categories = ["Brows", "Lashes"] as const;
+const defaultCategoryNames = ["Brows", "Lashes"] as const;
+
+type ServiceDraft = UpsertServiceRequest;
+
+function emptyDraft(category: string = "Brows"): ServiceDraft {
+  return {
+    category,
+    name: "",
+    description: null,
+    basePrice: 0,
+    durationMinutes: 15,
+    supportsTouchUp: false,
+    touchUpDiscount: 0,
+    isActive: true,
+    sortOrder: 0,
+  };
+}
 
 function getErrorMessage(error: unknown, fallbackMessage: string) {
-  if (error instanceof ApiError) {
-    return error.message;
-  }
-
+  if (error instanceof ApiError) return error.message;
   return fallbackMessage;
 }
 
@@ -32,92 +50,480 @@ async function withRefreshedToken<T>(
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) {
       const nextAccessToken = await refresh();
-
-      if (nextAccessToken) {
-        return operation(nextAccessToken);
-      }
+      if (nextAccessToken) return operation(nextAccessToken);
     }
-
     throw error;
   }
 }
 
-type ServiceDraft = UpsertServiceRequest;
+function ServiceForm({
+  draft,
+  setDraft,
+  categoryNames,
+  editingServiceId,
+  isSubmitting,
+  onSave,
+  onCancel,
+  onDelete,
+  isDeleting,
+}: {
+  draft: ServiceDraft;
+  setDraft: React.Dispatch<React.SetStateAction<ServiceDraft>>;
+  categoryNames: string[];
+  editingServiceId: string | null;
+  isSubmitting: boolean;
+  onSave: () => void;
+  onCancel: () => void;
+  onDelete?: () => void;
+  isDeleting?: boolean;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
+          {editingServiceId ? "Editar servicio" : "Nuevo servicio"}
+        </p>
+        <button
+          aria-label="Cerrar formulario"
+          className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--surface-muted)] text-[var(--text-muted)] transition hover:bg-[var(--secondary-btn)]"
+          type="button"
+          onClick={onCancel}
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
 
-function emptyDraft(): ServiceDraft {
-  return {
-    category: "Brows",
-    name: "",
-    description: null,
-    basePrice: 0,
-    durationMinutes: 15,
-    supportsTouchUp: false,
-    touchUpDiscount: 0,
-    isActive: true,
-    sortOrder: 0,
-  };
+      <label className="block text-sm font-medium text-[var(--text)]">
+        Categoria
+        <select
+          className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
+          value={draft.category}
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, category: event.target.value }))
+          }
+        >
+          {categoryNames.map((category) => (
+            <option key={category} value={category}>
+              {category}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="block text-sm font-medium text-[var(--text)]">
+        Nombre
+        <input
+          className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
+          value={draft.name}
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, name: event.target.value }))
+          }
+          placeholder="Nombre del servicio"
+        />
+      </label>
+
+      <label className="block text-sm font-medium text-[var(--text)]">
+        Descripcion
+        <textarea
+          className="mt-2 min-h-24 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 py-3 text-sm"
+          value={draft.description ?? ""}
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, description: event.target.value || null }))
+          }
+        />
+      </label>
+
+      <label className="block text-sm font-medium text-[var(--text)]">
+        Precio base (CUP)
+        <input
+          className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
+          inputMode="numeric"
+          type="number"
+          value={draft.basePrice}
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, basePrice: Number(event.target.value) }))
+          }
+        />
+      </label>
+
+      <label className="block text-sm font-medium text-[var(--text)]">
+        Duracion (minutos)
+        <input
+          className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
+          inputMode="numeric"
+          type="number"
+          value={draft.durationMinutes}
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, durationMinutes: Number(event.target.value) }))
+          }
+        />
+      </label>
+
+      <label className="block text-sm font-medium text-[var(--text)]">
+        Orden visual
+        <input
+          className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
+          inputMode="numeric"
+          type="number"
+          value={draft.sortOrder}
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, sortOrder: Number(event.target.value) }))
+          }
+        />
+      </label>
+
+      <label className="flex items-center gap-3 text-sm font-medium text-[var(--text)]">
+        <input
+          checked={draft.supportsTouchUp}
+          type="checkbox"
+          className="h-4 w-4 rounded accent-[var(--accent)]"
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, supportsTouchUp: event.target.checked }))
+          }
+        />
+        Soporta retoque
+      </label>
+
+      {draft.supportsTouchUp ? (
+        <label className="block text-sm font-medium text-[var(--text)]">
+          Descuento por retoque (CUP)
+          <input
+            className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
+            inputMode="numeric"
+            type="number"
+            value={draft.touchUpDiscount}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                touchUpDiscount: Number(event.target.value),
+              }))
+            }
+          />
+        </label>
+      ) : null}
+
+      <label className="flex items-center gap-3 text-sm font-medium text-[var(--text)]">
+        <input
+          checked={draft.isActive}
+          type="checkbox"
+          className="h-4 w-4 rounded accent-[var(--accent)]"
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, isActive: event.target.checked }))
+          }
+        />
+        Activo
+      </label>
+
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <button
+          className="inline-flex h-11 flex-1 items-center justify-center rounded-2xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-hover)] disabled:opacity-50"
+          type="button"
+          onClick={onSave}
+          disabled={isSubmitting || !draft.name.trim() || draft.basePrice <= 0}
+        >
+          {isSubmitting
+            ? "Guardando..."
+            : editingServiceId
+              ? "Guardar cambios"
+              : "Crear servicio"}
+        </button>
+        <button
+          className="inline-flex h-11 items-center justify-center rounded-2xl bg-[var(--secondary-btn)] px-4 text-sm font-semibold text-[var(--text)] transition hover:bg-[var(--secondary-btn-hover)]"
+          type="button"
+          onClick={onCancel}
+        >
+          Cancelar
+        </button>
+        {onDelete ? (
+          <button
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-[rgba(145,145,140,0.35)] px-4 text-sm font-semibold text-[var(--text-muted)] transition hover:bg-[var(--surface-muted)] disabled:opacity-50"
+            type="button"
+            onClick={onDelete}
+            disabled={isDeleting}
+          >
+            <Trash2 className="h-4 w-4" />
+            {isDeleting ? "Eliminando..." : "Eliminar"}
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function CategoryManager({
+  categoryNames,
+  onAddCategory,
+  onRenameCategory,
+  onRemoveCategory,
+  serviceCountByCategory,
+  isSaving,
+}: {
+  categoryNames: string[];
+  onAddCategory: (name: string) => void;
+  onRenameCategory: (index: number, newName: string) => void;
+  onRemoveCategory: (index: number) => void;
+  serviceCountByCategory: Record<string, number>;
+  isSaving: boolean;
+}) {
+  const [newName, setNewName] = useState("");
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editingName, setEditingName] = useState("");
+
+  function handleAdd() {
+    const trimmed = newName.trim();
+    if (!trimmed || categoryNames.includes(trimmed)) return;
+    onAddCategory(trimmed);
+    setNewName("");
+  }
+
+  function handleStartRename(index: number) {
+    setEditingIndex(index);
+    setEditingName(categoryNames[index]);
+  }
+
+  function handleSaveRename() {
+    if (editingIndex === null) return;
+    const trimmed = editingName.trim();
+    if (trimmed && trimmed !== categoryNames[editingIndex]) {
+      onRenameCategory(editingIndex, trimmed);
+    }
+    setEditingIndex(null);
+    setEditingName("");
+  }
+
+  function handleCancelRename() {
+    setEditingIndex(null);
+    setEditingName("");
+  }
+
+  return (
+    <article className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--text-subtle)]">Categorias</p>
+        <span className="text-xs text-[var(--text-muted)]">
+          {categoryNames.length} categoria{categoryNames.length !== 1 ? "s" : ""}
+        </span>
+      </div>
+
+      <div className="mt-3 space-y-2">
+        {categoryNames.map((category, index) => {
+          const count = serviceCountByCategory[category] ?? 0;
+
+          return (
+            <div
+              key={category}
+              className="flex items-center justify-between gap-2 rounded-[1.2rem] bg-[var(--surface-muted)] px-4 py-2.5"
+            >
+              {editingIndex === index ? (
+                <div className="flex flex-1 items-center gap-2">
+                  <input
+                    autoFocus
+                    className="h-9 flex-1 rounded-xl border border-[var(--border-input)] bg-[var(--surface)] px-3 text-sm"
+                    value={editingName}
+                    onChange={(event) => setEditingName(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") handleSaveRename();
+                      if (event.key === "Escape") handleCancelRename();
+                    }}
+                  />
+                  <button
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--accent)] text-white text-xs font-semibold"
+                    type="button"
+                    onClick={handleSaveRename}
+                  >
+                    OK
+                  </button>
+                  <button
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--secondary-btn)] text-xs font-semibold text-[var(--text)]"
+                    type="button"
+                    onClick={handleCancelRename}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <span className="min-w-0 truncate text-sm font-semibold text-[var(--text)]">{category}</span>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <span className="text-xs text-[var(--text-subtle)]">{count}</span>
+                    <button
+                      className="flex h-8 w-8 items-center justify-center rounded-xl text-[var(--text-muted)] transition hover:bg-[var(--secondary-btn)]"
+                      type="button"
+                      onClick={() => handleStartRename(index)}
+                      aria-label={`Editar categoria ${category}`}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    {count === 0 ? (
+                      <button
+                        className="flex h-8 w-8 items-center justify-center rounded-xl text-[var(--text-muted)] transition hover:bg-[var(--danger-bg)] hover:text-[var(--danger)]"
+                        type="button"
+                        onClick={() => onRemoveCategory(index)}
+                        aria-label={`Eliminar categoria ${category}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    ) : null}
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-3 flex gap-2">
+        <input
+          className="h-10 flex-1 rounded-xl border border-[var(--border-input)] bg-[var(--surface)] px-3 text-sm"
+          placeholder="Nueva categoria"
+          value={newName}
+          onChange={(event) => setNewName(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") handleAdd();
+          }}
+        />
+        <button
+          className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-[var(--accent)] px-3 text-xs font-semibold text-white transition hover:bg-[var(--accent-hover)] disabled:opacity-40"
+          type="button"
+          onClick={handleAdd}
+          disabled={!newName.trim() || isSaving}
+        >
+          <Plus className="h-4 w-4" />
+          Agregar
+        </button>
+      </div>
+
+      {isSaving ? (
+        <p className="mt-2 flex items-center gap-1.5 text-xs text-[var(--text-subtle)]">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          Guardando...
+        </p>
+      ) : null}
+    </article>
+  );
 }
 
 export function ServicesEditor() {
   const { accessToken, refresh, status } = useAdminSession();
   const [services, setServices] = useState<ServiceResponse[]>([]);
+  const [categoryNames, setCategoryNames] = useState<string[]>([...defaultCategoryNames]);
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
   const [draft, setDraft] = useState<ServiceDraft>(emptyDraft);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isSavingCategories, setIsSavingCategories] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [feedbackMessage, setFeedbackMessage] = useState("");
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [showMobileForm, setShowMobileForm] = useState(false);
 
   const activeServices = useMemo(() => services.filter((s) => s.isActive), [services]);
   const inactiveServices = useMemo(() => services.filter((s) => !s.isActive), [services]);
+  const serviceCountByCategory = useMemo(
+    () =>
+      services.reduce<Record<string, number>>((acc, s) => {
+        acc[s.category] = (acc[s.category] ?? 0) + 1;
+        return acc;
+      }, {}),
+    [services],
+  );
 
   useEffect(() => {
-    if (!accessToken || status !== "authenticated") {
-      return;
-    }
+    const mediaQuery = window.matchMedia("(max-width: 1023px)");
+    const syncViewport = (event?: MediaQueryListEvent) => {
+      setIsMobileViewport(event ? event.matches : mediaQuery.matches);
+    };
 
+    syncViewport();
+    mediaQuery.addEventListener("change", syncViewport);
+    return () => mediaQuery.removeEventListener("change", syncViewport);
+  }, []);
+
+  useEffect(() => {
+    if (!accessToken || status !== "authenticated") return;
     const sessionAccessToken = accessToken;
     let isMounted = true;
 
-    async function loadServices() {
+    async function loadData() {
       setIsLoading(true);
       setErrorMessage("");
 
       try {
-        const nextServices = await withRefreshedToken(sessionAccessToken, refresh, (currentAccessToken) =>
-          getAdminServices(currentAccessToken),
+        const [nextServices, nextCategories] = await withRefreshedToken<
+          [ServiceResponse[], string[]]
+        >(sessionAccessToken, refresh, (currentAccessToken) =>
+          Promise.all([
+            getAdminServices(currentAccessToken),
+            getAdminServiceCategoryNames(currentAccessToken),
+          ]),
         );
 
-        if (!isMounted) {
-          return;
-        }
-
+        if (!isMounted) return;
         setServices(nextServices.sort((a, b) => a.sortOrder - b.sortOrder));
+        setCategoryNames(nextCategories);
       } catch (error) {
-        if (!isMounted) {
-          return;
-        }
-
-        setErrorMessage(getErrorMessage(error, "No se pudieron cargar los servicios."));
+        if (!isMounted) return;
+        setErrorMessage(getErrorMessage(error, "No se pudieron cargar los datos."));
       } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
+        if (isMounted) setIsLoading(false);
       }
     }
 
-    void loadServices();
-
-    return () => {
-      isMounted = false;
-    };
+    void loadData();
+    return () => { isMounted = false; };
   }, [accessToken, refresh, status]);
 
-  async function saveService() {
-    if (!accessToken) {
-      return;
-    }
+  async function handleAddCategory(name: string) {
+    if (!accessToken) return;
+    const nextCategories = [...categoryNames, name];
+    setCategoryNames(nextCategories);
+    await persistCategories(nextCategories);
+  }
 
+  async function handleRenameCategory(index: number, newName: string) {
+    if (!accessToken) return;
+    const nextCategories = categoryNames.map((c, i) => (i === index ? newName : c));
+    setCategoryNames(nextCategories);
+
+    setServices((current) =>
+      current.map((s) => {
+        if (s.category !== categoryNames[index]) return s;
+        return { ...s, category: newName };
+      }),
+    );
+
+    await persistCategories(nextCategories);
+  }
+
+  async function handleRemoveCategory(index: number) {
+    if (!accessToken) return;
+    const categoryToRemove = categoryNames[index];
+    const nextCategories = categoryNames.filter((_, i) => i !== index);
+    setCategoryNames(nextCategories);
+    await persistCategories(nextCategories);
+
+    if (draft.category === categoryToRemove && nextCategories.length > 0) {
+      setDraft((current) => ({ ...current, category: nextCategories[0] }));
+    }
+  }
+
+  async function persistCategories(categories: string[]) {
+    if (!accessToken) return;
+    setIsSavingCategories(true);
+    try {
+      await withRefreshedToken(accessToken, refresh, (currentAccessToken) =>
+        upsertAdminServiceCategoryNames(currentAccessToken, categories),
+      );
+    } catch {
+      // Silently retry on next load
+    } finally {
+      setIsSavingCategories(false);
+    }
+  }
+
+  async function saveService() {
+    if (!accessToken) return;
     const sessionAccessToken = accessToken;
     setIsSubmitting(true);
     setFeedbackMessage("");
@@ -148,21 +554,44 @@ export function ServicesEditor() {
             .map((service) => (service.id === saved.id ? saved : service))
             .sort((a, b) => a.sortOrder - b.sortOrder);
         }
-
         return [...current, saved].sort((a, b) => a.sortOrder - b.sortOrder);
       });
 
       setEditingServiceId(null);
-      setDraft(emptyDraft());
+      setDraft(emptyDraft(categoryNames[0] ?? "Brows"));
       setFeedbackMessage(
         editingServiceId
           ? `Servicio "${saved.name}" actualizado.`
           : `Servicio "${saved.name}" creado.`,
       );
+      setShowMobileForm(false);
     } catch (error) {
       setErrorMessage(getErrorMessage(error, "No se pudo guardar el servicio."));
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function handleDeleteService() {
+    if (!accessToken || !editingServiceId) return;
+    const sessionAccessToken = accessToken;
+    setIsDeleting(true);
+    setErrorMessage("");
+
+    try {
+      await withRefreshedToken(sessionAccessToken, refresh, (currentAccessToken) =>
+        deleteAdminService(currentAccessToken, editingServiceId),
+      );
+
+      setServices((current) => current.filter((s) => s.id !== editingServiceId));
+      setFeedbackMessage("Servicio eliminado.");
+      setEditingServiceId(null);
+      setDraft(emptyDraft(categoryNames[0] ?? "Brows"));
+      setShowMobileForm(false);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error, "No se pudo eliminar el servicio."));
+    } finally {
+      setIsDeleting(false);
     }
   }
 
@@ -181,13 +610,29 @@ export function ServicesEditor() {
     });
     setErrorMessage("");
     setFeedbackMessage("");
+
+    if (isMobileViewport) {
+      setShowMobileForm(true);
+    }
+  }
+
+  function startNewService() {
+    setEditingServiceId(null);
+    setDraft(emptyDraft(categoryNames[0] ?? "Brows"));
+    setErrorMessage("");
+    setFeedbackMessage("");
+
+    if (isMobileViewport) {
+      setShowMobileForm(true);
+    }
   }
 
   function cancelEditing() {
     setEditingServiceId(null);
-    setDraft(emptyDraft());
+    setDraft(emptyDraft(categoryNames[0] ?? "Brows"));
     setErrorMessage("");
     setFeedbackMessage("");
+    setShowMobileForm(false);
   }
 
   if (status === "loading" || isLoading) {
@@ -199,289 +644,183 @@ export function ServicesEditor() {
   }
 
   return (
-    <main className="grid gap-5 lg:grid-cols-[1fr_1fr]">
-      <section className="space-y-5">
-        <article className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
-                Catalogo
-              </p>
-              <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--text)]">
-                Servicios activos e inactivos.
-              </h2>
-            </div>
-            <button
-              className="inline-flex h-11 items-center justify-center rounded-2xl bg-[var(--accent)] px-4 text-sm font-semibold text-white"
-              type="button"
-              onClick={cancelEditing}
-            >
-              Nuevo servicio
-            </button>
-          </div>
+    <>
+      <main className="grid gap-5 lg:grid-cols-[1fr_1fr]">
+        <section className="space-y-5">
+          <CategoryManager
+            categoryNames={categoryNames}
+            onAddCategory={handleAddCategory}
+            onRenameCategory={handleRenameCategory}
+            onRemoveCategory={handleRemoveCategory}
+            serviceCountByCategory={serviceCountByCategory}
+            isSaving={isSavingCategories}
+          />
 
-          {errorMessage ? (
-            <p className="mt-4 rounded-[1.2rem] bg-[var(--danger-bg)] px-4 py-3 text-sm font-medium text-[var(--danger)]">
-              {errorMessage}
-            </p>
-          ) : null}
-
-          {feedbackMessage ? (
-            <p className="mt-4 rounded-[1.2rem] bg-[var(--success-bg)] px-4 py-3 text-sm font-medium text-[var(--success)]">
-              {feedbackMessage}
-            </p>
-          ) : null}
-        </article>
-
-        {activeServices.length ? (
           <article className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--text-subtle)]">
-              Activos
-            </p>
-            <div className="mt-4 space-y-3">
-              {activeServices.map((service) => (
-                <div
-                  key={service.id}
-                  className={`rounded-[1.4rem] px-4 py-4 ${
-                    editingServiceId === service.id
-                      ? "border border-[var(--surface-inverse)] bg-[var(--surface-inverse)] text-[var(--text-on-dark)]"
-                      : "bg-[var(--surface-muted)] text-[var(--text)]"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] opacity-70">
-                        {service.category}
-                      </p>
-                      <p className="mt-1 font-semibold">{service.name}</p>
-                      <p
-                        className={`mt-1 text-sm leading-6 ${
-                          editingServiceId === service.id ? "text-[var(--text-subtle)]" : "text-[var(--text-muted)]"
-                        }`}
-                      >
-                        {service.description ?? "Sin descripcion."}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-semibold">{formatPrice(service.basePrice)}</p>
-                      <p className="mt-1 text-xs opacity-70">{formatDuration(service.durationMinutes)}</p>
-                    </div>
-                  </div>
-                  <button
-                    className={`mt-4 inline-flex h-9 items-center justify-center rounded-xl px-4 text-xs font-semibold ${
-                      editingServiceId === service.id
-                        ? "bg-[var(--surface)]/10 text-white"
-                        : "bg-[var(--surface)] text-[var(--text)]"
-                    }`}
-                    type="button"
-                    onClick={() => startEditing(service)}
-                  >
-                    Editar
-                  </button>
-                </div>
-              ))}
-            </div>
-          </article>
-        ) : null}
-
-        {inactiveServices.length ? (
-          <article className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--text-subtle)]">
-              Inactivos
-            </p>
-            <div className="mt-4 space-y-3">
-              {inactiveServices.map((service) => (
-                <div
-                  key={service.id}
-                  className={`rounded-[1.4rem] px-4 py-4 ${
-                    editingServiceId === service.id
-                      ? "border border-[var(--surface-inverse)] bg-[var(--surface-inverse)] text-[var(--text-on-dark)]"
-                      : "bg-[var(--surface-muted)] text-[var(--text)]"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-subtle)]">
-                        {service.category}
-                      </p>
-                      <p className="mt-1 font-semibold">{service.name}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-semibold">{formatPrice(service.basePrice)}</p>
-                    </div>
-                  </div>
-                  <button
-                    className={`mt-4 inline-flex h-9 items-center justify-center rounded-xl px-4 text-xs font-semibold ${
-                      editingServiceId === service.id
-                        ? "bg-[var(--surface)]/10 text-white"
-                        : "bg-[var(--surface)] text-[var(--text)]"
-                    }`}
-                    type="button"
-                    onClick={() => startEditing(service)}
-                  >
-                    Editar
-                  </button>
-                </div>
-              ))}
-            </div>
-          </article>
-        ) : null}
-      </section>
-
-      <section className="space-y-5">
-        <article className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5 lg:sticky lg:top-6">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--text-subtle)]">
-            {editingServiceId ? "Editar servicio" : "Nuevo servicio"}
-          </p>
-
-          <div className="mt-4 space-y-4">
-            <label className="block text-sm font-medium text-[var(--text)]">
-              Categoria
-              <select
-                className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4"
-                value={draft.category}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, category: event.target.value }))
-                }
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
+                  Catalogo
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--text)]">
+                  Servicios activos e inactivos.
+                </h2>
+              </div>
+              <button
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-hover)]"
+                type="button"
+                onClick={startNewService}
               >
-                {categories.map((category) => (
-                  <option key={category} value={category}>
-                    {category}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <Plus className="h-4 w-4" />
+                Nuevo servicio
+              </button>
+            </div>
 
-            <label className="block text-sm font-medium text-[var(--text)]">
-              Nombre
-              <input
-                className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] px-4"
-                value={draft.name}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, name: event.target.value }))
-                }
-              />
-            </label>
-
-            <label className="block text-sm font-medium text-[var(--text)]">
-              Descripcion
-              <textarea
-                className="mt-2 min-h-24 w-full rounded-2xl border border-[var(--border-input)] px-4 py-3"
-                value={draft.description ?? ""}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, description: event.target.value || null }))
-                }
-              />
-            </label>
-
-            <label className="block text-sm font-medium text-[var(--text)]">
-              Precio base (CUP)
-              <input
-                className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] px-4"
-                inputMode="numeric"
-                type="number"
-                value={draft.basePrice}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, basePrice: Number(event.target.value) }))
-                }
-              />
-            </label>
-
-            <label className="block text-sm font-medium text-[var(--text)]">
-              Duracion (minutos)
-              <input
-                className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] px-4"
-                inputMode="numeric"
-                type="number"
-                value={draft.durationMinutes}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    durationMinutes: Number(event.target.value),
-                  }))
-                }
-              />
-            </label>
-
-            <label className="block text-sm font-medium text-[var(--text)]">
-              Orden visual
-              <input
-                className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] px-4"
-                inputMode="numeric"
-                type="number"
-                value={draft.sortOrder}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, sortOrder: Number(event.target.value) }))
-                }
-              />
-            </label>
-
-            <label className="flex items-center gap-3 text-sm font-medium text-[var(--text)]">
-              <input
-                checked={draft.supportsTouchUp}
-                type="checkbox"
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, supportsTouchUp: event.target.checked }))
-                }
-              />
-              Soporta retoque
-            </label>
-
-            {draft.supportsTouchUp ? (
-              <label className="block text-sm font-medium text-[var(--text)]">
-                Descuento por retoque (CUP)
-                <input
-                  className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] px-4"
-                  inputMode="numeric"
-                  type="number"
-                  value={draft.touchUpDiscount}
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      touchUpDiscount: Number(event.target.value),
-                    }))
-                  }
-                />
-              </label>
+            {errorMessage ? (
+              <p className="mt-4 rounded-[1.2rem] bg-[var(--danger-bg)] px-4 py-3 text-sm font-medium text-[var(--danger)]">
+                {errorMessage}
+              </p>
             ) : null}
 
-            <label className="flex items-center gap-3 text-sm font-medium text-[var(--text)]">
-              <input
-                checked={draft.isActive}
-                type="checkbox"
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, isActive: event.target.checked }))
-                }
-              />
-              Activo
-            </label>
+            {feedbackMessage ? (
+              <p className="mt-4 rounded-[1.2rem] bg-[var(--success-bg)] px-4 py-3 text-sm font-medium text-[var(--success)]">
+                {feedbackMessage}
+              </p>
+            ) : null}
+          </article>
 
-            <div className="flex gap-3">
-              <button
-                className="inline-flex h-11 flex-1 items-center justify-center rounded-2xl bg-[var(--accent)] px-4 text-sm font-semibold text-white"
-                type="button"
-                onClick={() => void saveService()}
-                disabled={isSubmitting || !draft.name.trim() || draft.basePrice <= 0}
-              >
-                {isSubmitting
-                  ? "Guardando..."
-                  : editingServiceId
-                    ? "Guardar cambios"
-                    : "Crear servicio"}
-              </button>
-              {editingServiceId ? (
-                <button
-                  className="inline-flex h-11 items-center justify-center rounded-2xl bg-[var(--secondary-btn)] px-4 text-sm font-semibold text-[var(--text)]"
-                  type="button"
-                  onClick={cancelEditing}
-                >
-                  Cancelar
-                </button>
-              ) : null}
-            </div>
-          </div>
-        </article>
-      </section>
-    </main>
+          {activeServices.length ? (
+            <article className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5">
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--text-subtle)]">
+                Activos
+              </p>
+              <div className="mt-4 space-y-3">
+                {activeServices.map((service) => (
+                  <div
+                    key={service.id}
+                    className={`rounded-[1.4rem] px-4 py-4 ${
+                      editingServiceId === service.id && !isMobileViewport
+                        ? "border border-[var(--surface-inverse)] bg-[var(--surface-inverse)] text-[var(--text-on-dark)]"
+                        : "bg-[var(--surface-muted)] text-[var(--text)]"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] opacity-70">
+                          {service.category}
+                        </p>
+                        <p className="mt-1 font-semibold">{service.name}</p>
+                        <p
+                          className={`mt-1 text-sm leading-6 ${
+                            editingServiceId === service.id && !isMobileViewport
+                              ? "text-[var(--text-subtle)]"
+                              : "text-[var(--text-muted)]"
+                          }`}
+                        >
+                          {service.description ?? "Sin descripcion."}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold">{formatPrice(service.basePrice)}</p>
+                        <p className="mt-1 text-xs opacity-70">{formatDuration(service.durationMinutes)}</p>
+                      </div>
+                    </div>
+                    <button
+                      className={`mt-4 inline-flex h-9 items-center justify-center rounded-xl px-4 text-xs font-semibold transition ${
+                        editingServiceId === service.id && !isMobileViewport
+                          ? "bg-[var(--surface)]/10 text-white"
+                          : "bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--secondary-btn)]"
+                      }`}
+                      type="button"
+                      onClick={() => startEditing(service)}
+                    >
+                      <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                      Editar
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </article>
+          ) : null}
+
+          {inactiveServices.length ? (
+            <article className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5">
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--text-subtle)]">
+                Inactivos
+              </p>
+              <div className="mt-4 space-y-3">
+                {inactiveServices.map((service) => (
+                  <div
+                    key={service.id}
+                    className={`rounded-[1.4rem] px-4 py-4 ${
+                      editingServiceId === service.id && !isMobileViewport
+                        ? "border border-[var(--surface-inverse)] bg-[var(--surface-inverse)] text-[var(--text-on-dark)]"
+                        : "bg-[var(--surface-muted)] text-[var(--text)]"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] opacity-70">
+                          {service.category}
+                        </p>
+                        <p className="mt-1 font-semibold">{service.name}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold">{formatPrice(service.basePrice)}</p>
+                      </div>
+                    </div>
+                    <button
+                      className={`mt-4 inline-flex h-9 items-center justify-center rounded-xl px-4 text-xs font-semibold transition ${
+                        editingServiceId === service.id && !isMobileViewport
+                          ? "bg-[var(--surface)]/10 text-white"
+                          : "bg-[var(--surface)] text-[var(--text)] hover:bg-[var(--secondary-btn)]"
+                      }`}
+                      type="button"
+                      onClick={() => startEditing(service)}
+                    >
+                      <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                      Editar
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </article>
+          ) : null}
+        </section>
+
+        <section className="hidden space-y-5 lg:block">
+          <article className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5 lg:sticky lg:top-6">
+            <ServiceForm
+              draft={draft}
+              setDraft={setDraft}
+              categoryNames={categoryNames}
+              editingServiceId={editingServiceId}
+              isSubmitting={isSubmitting}
+              onSave={() => void saveService()}
+              onCancel={cancelEditing}
+              onDelete={editingServiceId ? () => void handleDeleteService() : undefined}
+              isDeleting={isDeleting}
+            />
+          </article>
+        </section>
+      </main>
+
+      <AdminMobileSheet
+        open={showMobileForm}
+        onClose={cancelEditing}
+      >
+        <ServiceForm
+          draft={draft}
+          setDraft={setDraft}
+          categoryNames={categoryNames}
+          editingServiceId={editingServiceId}
+          isSubmitting={isSubmitting}
+          onSave={() => void saveService()}
+          onCancel={cancelEditing}
+          onDelete={editingServiceId ? () => void handleDeleteService() : undefined}
+          isDeleting={isDeleting}
+        />
+      </AdminMobileSheet>
+    </>
   );
 }

@@ -1,4 +1,4 @@
-export type ServiceCategory = "Brows" | "Lashes";
+export type ServiceCategory = string;
 
 export type Service = {
   category: ServiceCategory;
@@ -8,6 +8,7 @@ export type Service = {
   basePrice: number;
   durationMinutes: number;
   supportsTouchUp: boolean;
+  touchUpDiscount?: number;
 };
 
 export type GalleryItem = {

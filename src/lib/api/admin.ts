@@ -369,6 +369,43 @@ export function updateAdminService(accessToken: string, serviceId: string, body:
   });
 }
 
+export function deleteAdminService(accessToken: string, serviceId: string) {
+  return adminFetch<null>(`/admin/services/${serviceId}`, {
+    accessToken,
+    method: "DELETE",
+  });
+}
+
+// Service categories persisted via landing content
+export async function getAdminServiceCategoryNames(accessToken: string): Promise<string[]> {
+  try {
+    const allContent = await getAdminLandingContent(accessToken);
+    const record = allContent.find((c) => c.contentKey === "service_categories");
+    if (record?.jsonValue) {
+      const categories = (record.jsonValue as { categories?: string[] }).categories;
+      if (Array.isArray(categories) && categories.every((c) => typeof c === "string")) {
+        return categories;
+      }
+    }
+  } catch {
+    // Fall through to default
+  }
+  return ["Brows", "Lashes"];
+}
+
+export async function upsertAdminServiceCategoryNames(
+  accessToken: string,
+  categoryNames: string[],
+) {
+  return upsertAdminLandingContent(accessToken, {
+    contentKey: "service_categories",
+    title: null,
+    subtitle: null,
+    body: null,
+    jsonValue: { categories: categoryNames } as Record<string, unknown>,
+  });
+}
+
 // Gallery upload / delete
 export function uploadAdminGalleryImage(
   accessToken: string,

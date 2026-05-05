@@ -27,12 +27,16 @@ type HomePageContentProps = {
 
 export function HomePageContent({ siteData }: Readonly<HomePageContentProps>) {
   const { businessHours, businessProfile, content, galleryItems, services, testimonials } = siteData;
-  const browsServices = services.filter((service) => service.category === "Brows");
-  const lashServices = services.filter((service) => service.category === "Lashes");
   const featuredGalleryItems = galleryItems.slice(0, 4);
-  const featuredBrowsServices = browsServices.slice(0, 2);
-  const featuredLashServices = lashServices.slice(0, 2);
   const displayedTestimonials = testimonials.slice(0, 2);
+
+  const servicesByCategory = services.reduce<Record<string, typeof services>>((acc, service) => {
+    const category = service.category || "Servicios";
+    if (!acc[category]) acc[category] = [];
+    acc[category].push(service);
+    return acc;
+  }, {});
+  const categoryEntries = Object.entries(servicesByCategory);
 
   return (
     <>
@@ -169,78 +173,52 @@ export function HomePageContent({ siteData }: Readonly<HomePageContentProps>) {
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <article className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--text-subtle)]">Cejas</p>
-                  <h3 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--text)]">
-                    Desde {formatPrice(Math.min(...browsServices.map((service) => service.basePrice)))}
-                  </h3>
-                </div>
-                <span className="rounded-full bg-[var(--surface-muted)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
-                  {browsServices.length} servicios
-                </span>
-              </div>
+            {categoryEntries.map(([category, categoryServices]) => {
+              const featured = categoryServices.slice(0, 2);
+              const minPrice = Math.min(...categoryServices.map((s) => s.basePrice));
 
-              <div className="mt-5 space-y-3">
-                {featuredBrowsServices.map((service) => (
-                  <article key={service.slug} className="rounded-[1.4rem] bg-[var(--surface-muted)] p-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <h4 className="text-[1.02rem] font-semibold text-[var(--text)]">{service.name}</h4>
-                        <p className="mt-1 text-[0.96rem] leading-6 text-[var(--text-muted)]">{service.description}</p>
-                      </div>
-                      <span className="text-sm font-semibold text-[var(--text)]">
-                        {formatPrice(service.basePrice)}
-                      </span>
+              return (
+                <article key={category} className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--text-subtle)]">{category}</p>
+                      <h3 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--text)]">
+                        Desde {formatPrice(minPrice)}
+                      </h3>
                     </div>
-                    <p className="mt-3 text-sm font-medium text-[var(--danger)]">
-                      {formatDuration(service.durationMinutes)}
-                    </p>
-                  </article>
-                ))}
-              </div>
-            </article>
+                    <span className="rounded-full bg-[var(--surface-muted)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
+                      {categoryServices.length} servicios
+                    </span>
+                  </div>
 
-            <article className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[var(--text-subtle)]">Pestanas</p>
-                  <h3 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--text)]">
-                    Desde {formatPrice(Math.min(...lashServices.map((service) => service.basePrice)))}
-                  </h3>
-                </div>
-                <span className="rounded-full bg-[var(--surface-muted)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
-                  {lashServices.length} servicios
-                </span>
-              </div>
-
-              <div className="mt-5 space-y-3">
-                {featuredLashServices.map((service) => (
-                  <article key={service.slug} className="rounded-[1.4rem] bg-[var(--surface-muted)] p-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <h4 className="text-[1.02rem] font-semibold text-[var(--text)]">{service.name}</h4>
-                        <p className="mt-1 text-[0.96rem] leading-6 text-[var(--text-muted)]">{service.description}</p>
-                      </div>
-                      <span className="text-sm font-semibold text-[var(--text)]">
-                        {formatPrice(service.basePrice)}
-                      </span>
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2 text-sm">
-                      <span className="font-medium text-[var(--danger)]">
-                        {formatDuration(service.durationMinutes)}
-                      </span>
-                      {service.supportsTouchUp ? (
-                        <span className="rounded-full bg-[var(--danger-bg)] px-3 py-1 font-semibold text-[var(--danger)]">
-                          Retoque: {formatPrice(service.basePrice - 500)}
-                        </span>
-                      ) : null}
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </article>
+                  <div className="mt-5 space-y-3">
+                    {featured.map((service) => (
+                      <article key={service.slug} className="rounded-[1.4rem] bg-[var(--surface-muted)] p-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <h4 className="text-[1.02rem] font-semibold text-[var(--text)]">{service.name}</h4>
+                            <p className="mt-1 text-[0.96rem] leading-6 text-[var(--text-muted)]">{service.description}</p>
+                          </div>
+                          <span className="text-sm font-semibold text-[var(--text)]">
+                            {formatPrice(service.basePrice)}
+                          </span>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2 text-sm">
+                          <span className="font-medium text-[var(--danger)]">
+                            {formatDuration(service.durationMinutes)}
+                          </span>
+                          {service.supportsTouchUp ? (
+                            <span className="rounded-full bg-[var(--danger-bg)] px-3 py-1 font-semibold text-[var(--danger)]">
+                              Retoque: {formatPrice(service.basePrice - (service.touchUpDiscount ?? 500))}
+                            </span>
+                          ) : null}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </section>
 

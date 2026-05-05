@@ -113,13 +113,14 @@ function mapServices(services: ServiceResponse[] | null): Service[] {
   }
 
   return services.map((service) => ({
-    category: service.category === "BROWS" ? "Brows" : "Lashes",
+    category: service.category,
     name: service.name,
     slug: service.slug,
     description: service.description ?? "",
     basePrice: Number(service.basePrice),
     durationMinutes: service.durationMinutes,
     supportsTouchUp: service.supportsTouchUp,
+    touchUpDiscount: service.touchUpDiscount,
   }));
 }
 
