@@ -331,7 +331,7 @@ function AppointmentWizardPanel({
   furthestStepReached,
 }: WizardPanelProps) {
   return (
-    <article className="flex flex-col overflow-hidden rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] lg:max-h-[calc(100vh-8rem)] sm:rounded-[2rem]">
+    <article className="flex flex-col overflow-hidden rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] max-h-[calc(100vh-8rem)] sm:rounded-[2rem]">
       <div className="shrink-0 p-4 pb-0 sm:p-5 sm:pb-0">
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
@@ -386,7 +386,7 @@ function AppointmentWizardPanel({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 pt-5 sm:p-5 sm:pt-5">
+      <div className="min-h-0 flex-1 overflow-y-auto p-4 pt-5 sm:p-5 sm:pt-5">
         {currentStep === 0 ? (
           <div className="space-y-4">
             <label className="block text-sm font-medium text-[var(--text)]">
