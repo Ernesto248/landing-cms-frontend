@@ -221,6 +221,16 @@ export type RangeFinanceResponse = {
   days: DailyFinanceEntry[];
 };
 
+export type CategoryEntry = {
+  category: string;
+  amount: number;
+};
+
+export type CategoryBreakdownResponse = {
+  incomeBreakdown: CategoryEntry[];
+  expenseBreakdown: CategoryEntry[];
+};
+
 export type ScheduleBlockResponse = {
   id: string;
   blockDate: string;

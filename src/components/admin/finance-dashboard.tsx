@@ -1,30 +1,31 @@
 "use client";
 
 import {
-  AlertCircle,
   Calendar,
-  Check,
-  DollarSign,
   Loader2,
   Plus,
   Receipt,
-  Tag,
   TrendingDown,
   TrendingUp,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
+import { AdminMobileSheet } from "@/components/admin/admin-mobile-sheet";
 import { useAdminSession } from "@/components/admin/admin-session-provider";
 import {
   createAdminExpense,
   createAdminExpenseCategory,
+  getAdminCategoryBreakdown,
   getAdminExpenseCategories,
   getAdminRangeFinanceSummary,
 } from "@/lib/api/admin";
 import { ApiError } from "@/lib/api/http";
 import { getHavanaIsoDate } from "@/lib/havana-time";
+import { toast } from "@/lib/toast";
 import type {
+  CategoryBreakdownResponse,
   DailyFinanceEntry,
   ExpenseCategoryResponse,
   ExpenseResponse,
@@ -76,11 +77,6 @@ function getFilterRange(filter: DateFilter, customFrom: string, customTo: string
   }
 }
 
-function getErrorMessage(error: unknown, fallbackMessage: string) {
-  if (error instanceof ApiError) return error.message;
-  return fallbackMessage;
-}
-
 async function withRefreshedToken<T>(
   accessToken: string,
   refresh: () => Promise<string | null>,
@@ -106,12 +102,24 @@ const FILTER_LABELS: Record<DateFilter, string> = {
 
 const FILTERS: DateFilter[] = ["today", "week", "month", "custom"];
 
+const CHART_COLORS = [
+  "var(--success)",
+  "var(--danger)",
+  "var(--accent)",
+  "#f59e0b",
+  "#8b5cf6",
+  "#06b6d4",
+  "#ec4899",
+  "#84cc16",
+];
+
 export function FinanceDashboard() {
   const { accessToken, refresh, status } = useAdminSession();
   const [activeFilter, setActiveFilter] = useState<DateFilter>("month");
   const [customFrom, setCustomFrom] = useState(daysAgo(6));
   const [customTo, setCustomTo] = useState(todayString());
   const [rangeData, setRangeData] = useState<RangeFinanceResponse | null>(null);
+  const [breakdown, setBreakdown] = useState<CategoryBreakdownResponse | null>(null);
   const [expenses, setExpenses] = useState<ExpenseResponse[]>([]);
   const [categories, setCategories] = useState<ExpenseCategoryResponse[]>([]);
   const [categoryName, setCategoryName] = useState("");
@@ -124,8 +132,8 @@ export function FinanceDashboard() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [feedbackMessage, setFeedbackMessage] = useState("");
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [showMobileExpenseForm, setShowMobileExpenseForm] = useState(false);
 
   const { from, to } = getFilterRange(activeFilter, customFrom, customTo);
   const activeCategories = useMemo(
@@ -142,6 +150,32 @@ export function FinanceDashboard() {
     }));
   }, [rangeData]);
 
+  const incomeBreakdownData = useMemo(() => {
+    if (!breakdown?.incomeBreakdown?.length) return [];
+    return breakdown.incomeBreakdown.map((entry) => ({
+      category: entry.category,
+      amount: entry.amount,
+    }));
+  }, [breakdown]);
+
+  const expenseBreakdownData = useMemo(() => {
+    if (!breakdown?.expenseBreakdown?.length) return [];
+    return breakdown.expenseBreakdown.map((entry) => ({
+      category: entry.category,
+      amount: entry.amount,
+    }));
+  }, [breakdown]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 1023px)");
+    const syncViewport = (event?: MediaQueryListEvent) => {
+      setIsMobileViewport(event ? event.matches : mediaQuery.matches);
+    };
+    syncViewport();
+    mediaQuery.addEventListener("change", syncViewport);
+    return () => mediaQuery.removeEventListener("change", syncViewport);
+  }, []);
+
   useEffect(() => {
     if (!accessToken || status !== "authenticated") return;
     const sessionAccessToken = accessToken;
@@ -149,23 +183,24 @@ export function FinanceDashboard() {
 
     async function loadFinance() {
       setIsLoading(true);
-      setErrorMessage("");
       try {
-        const [nextRange, nextCategories] = await withRefreshedToken<
-          [RangeFinanceResponse, ExpenseCategoryResponse[]]
+        const [nextRange, nextCategories, nextBreakdown] = await withRefreshedToken<
+          [RangeFinanceResponse, ExpenseCategoryResponse[], CategoryBreakdownResponse]
         >(sessionAccessToken, refresh, (currentAccessToken) =>
           Promise.all([
             getAdminRangeFinanceSummary(currentAccessToken, from, to),
             getAdminExpenseCategories(currentAccessToken),
+            getAdminCategoryBreakdown(currentAccessToken, from, to),
           ]),
         );
         if (!isMounted) return;
         setRangeData(nextRange);
         setExpenses(nextRange.expenses);
         setCategories(nextCategories);
-      } catch (error) {
+        setBreakdown(nextBreakdown);
+      } catch {
         if (!isMounted) return;
-        setErrorMessage(getErrorMessage(error, "No se pudieron cargar las finanzas."));
+        toast.error("No se pudieron cargar las finanzas.");
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -178,8 +213,6 @@ export function FinanceDashboard() {
   async function handleCreateCategory() {
     if (!accessToken || !categoryName.trim()) return;
     setIsSubmitting(true);
-    setFeedbackMessage("");
-    setErrorMessage("");
 
     try {
       const sessionAccessToken = accessToken;
@@ -191,9 +224,9 @@ export function FinanceDashboard() {
       );
       setDraft((current) => ({ ...current, expenseCategoryId: createdCategory.id }));
       setCategoryName("");
-      setFeedbackMessage(`Categoria creada: ${createdCategory.name}.`);
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error, "No se pudo crear la categoria."));
+      toast.success(`Categoria creada: ${createdCategory.name}.`);
+    } catch {
+      toast.error("No se pudo crear la categoria.");
     } finally {
       setIsSubmitting(false);
     }
@@ -202,8 +235,6 @@ export function FinanceDashboard() {
   async function handleCreateExpense() {
     if (!accessToken) return;
     setIsSubmitting(true);
-    setFeedbackMessage("");
-    setErrorMessage("");
 
     try {
       const sessionAccessToken = accessToken;
@@ -228,11 +259,25 @@ export function FinanceDashboard() {
         expenseCategoryId: draft.expenseCategoryId,
         notes: "",
       });
-      setFeedbackMessage(`Gasto registrado por ${formatCurrency(createdExpense.amount)}.`);
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error, "No se pudo registrar el gasto."));
+      setShowMobileExpenseForm(false);
+      toast.success(`Gasto registrado por ${formatCurrency(createdExpense.amount)}.`);
+    } catch {
+      toast.error("No se pudo registrar el gasto.");
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  function handleOpenNewExpense() {
+    setDraft({
+      detail: "",
+      amount: "0",
+      expenseDate: from,
+      expenseCategoryId: draft.expenseCategoryId,
+      notes: "",
+    });
+    if (isMobileViewport) {
+      setShowMobileExpenseForm(true);
     }
   }
 
@@ -245,314 +290,373 @@ export function FinanceDashboard() {
     );
   }
 
+  const expenseFormContent = (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 lg:hidden">
+        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
+          Registrar gasto
+        </p>
+        <button
+          aria-label="Cerrar formulario"
+          className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--surface-muted)] text-[var(--text-muted)] transition hover:bg-[var(--secondary-btn)]"
+          type="button"
+          onClick={() => setShowMobileExpenseForm(false)}
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      <label className="block text-sm font-medium text-[var(--text)]">
+        Categoria
+        <select
+          className="mt-2 h-11 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
+          value={draft.expenseCategoryId}
+          onChange={(e) => setDraft((c) => ({ ...c, expenseCategoryId: e.target.value }))}
+        >
+          <option value="">Sin categoria</option>
+          {activeCategories.map((category) => (
+            <option key={category.id} value={category.id}>
+              {category.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="block text-sm font-medium text-[var(--text)]">
+        Detalle
+        <input
+          className="mt-2 h-11 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
+          value={draft.detail}
+          onChange={(e) => setDraft((c) => ({ ...c, detail: e.target.value }))}
+        />
+      </label>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block text-sm font-medium text-[var(--text)]">
+          Monto (CUP)
+          <input
+            className="mt-2 h-11 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
+            inputMode="numeric"
+            value={draft.amount}
+            onChange={(e) => setDraft((c) => ({ ...c, amount: e.target.value }))}
+          />
+        </label>
+        <label className="block text-sm font-medium text-[var(--text)]">
+          Fecha
+          <input
+            className="mt-2 h-11 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
+            type="date"
+            min={from}
+            max={to}
+            value={
+              draft.expenseDate < from || draft.expenseDate > to
+                ? from
+                : draft.expenseDate
+            }
+            onChange={(e) => setDraft((c) => ({ ...c, expenseDate: e.target.value }))}
+          />
+        </label>
+      </div>
+      <label className="block text-sm font-medium text-[var(--text)]">
+        Notas
+        <textarea
+          className="mt-2 h-20 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 py-3 text-sm"
+          value={draft.notes}
+          onChange={(e) => setDraft((c) => ({ ...c, notes: e.target.value }))}
+        />
+      </label>
+      <button
+        className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-hover)] disabled:bg-[var(--text-subtle)]"
+        type="button"
+        onClick={() => void handleCreateExpense()}
+        disabled={isSubmitting}
+      >
+        {isSubmitting ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Guardando...
+          </>
+        ) : (
+          "Guardar gasto"
+        )}
+      </button>
+    </div>
+  );
+
   return (
-    <main className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
-      <section className="space-y-4">
-        <article className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-4 sm:rounded-[2rem] sm:p-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent)] sm:text-sm">Finanzas</p>
-              <h2 className="mt-1.5 text-xl font-semibold tracking-[-0.04em] text-[var(--text)] sm:text-2xl">
-                Ingresos, gastos y balance.
-              </h2>
+    <>
+      <main className="min-w-0 grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+        <section className="min-w-0 space-y-4">
+          <article className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-4 sm:rounded-[2rem] sm:p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent)] sm:text-sm">Finanzas</p>
+                <h2 className="mt-1.5 text-xl font-semibold tracking-[-0.04em] text-[var(--text)] sm:text-2xl">
+                  Ingresos, gastos y balance.
+                </h2>
+              </div>
             </div>
-          </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            {FILTERS.map((filter) => (
-              <button
-                key={filter}
-                className={`inline-flex h-9 items-center justify-center rounded-2xl px-4 text-xs font-semibold transition sm:text-sm ${
-                  activeFilter === filter
-                    ? "bg-[var(--accent)] text-white"
-                    : "bg-[var(--surface-muted)] text-[var(--text-muted)]"
-                }`}
-                type="button"
-                onClick={() => setActiveFilter(filter)}
-              >
-                {FILTER_LABELS[filter]}
-              </button>
-            ))}
-          </div>
-
-          {activeFilter === "custom" ? (
-            <div className="mt-3 flex flex-wrap gap-3">
-              <label className="block text-sm font-medium text-[var(--text)]">
-                Desde
-                <input
-                  className="mt-1 h-11 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
-                  type="date"
-                  value={customFrom}
-                  max={customTo}
-                  onChange={(e) => setCustomFrom(e.target.value)}
-                />
-              </label>
-              <label className="block text-sm font-medium text-[var(--text)]">
-                Hasta
-                <input
-                  className="mt-1 h-11 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
-                  type="date"
-                  min={customFrom}
-                  max={todayString()}
-                  value={customTo}
-                  onChange={(e) => setCustomTo(e.target.value)}
-                />
-              </label>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              {FILTERS.map((filter) => (
+                <button
+                  key={filter}
+                  className={`inline-flex h-9 items-center justify-center rounded-2xl px-4 text-xs font-semibold transition sm:text-sm ${
+                    activeFilter === filter
+                      ? "bg-[var(--accent)] text-white"
+                      : "bg-[var(--surface-muted)] text-[var(--text-muted)]"
+                  }`}
+                  type="button"
+                  onClick={() => setActiveFilter(filter)}
+                >
+                  {FILTER_LABELS[filter]}
+                </button>
+              ))}
             </div>
-          ) : null}
 
-          {errorMessage ? (
-            <div className="mt-4 flex items-start gap-2 rounded-[1.2rem] bg-[var(--danger-bg)] px-4 py-3 text-sm font-medium text-[var(--danger)]">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{errorMessage}</span>
-            </div>
-          ) : null}
-
-          {feedbackMessage ? (
-            <div className="mt-4 flex items-start gap-2 rounded-[1.2rem] bg-[var(--success-bg)] px-4 py-3 text-sm font-medium text-[var(--success)]">
-              <Check className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{feedbackMessage}</span>
-            </div>
-          ) : null}
-        </article>
-
-        <section className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <article className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-[var(--success)]" />
-              <p className="text-xs text-[var(--text-muted)]">Ingresos</p>
-            </div>
-            <p className="mt-2 text-xl font-semibold tracking-[-0.04em] text-[var(--success)] sm:text-2xl">
-              {formatCurrency(rangeData?.completedIncome ?? 0)}
-            </p>
+            {activeFilter === "custom" ? (
+              <div className="mt-3 flex flex-wrap gap-3">
+                <label className="block text-sm font-medium text-[var(--text)]">
+                  Desde
+                  <input
+                    className="mt-1 h-11 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
+                    type="date"
+                    value={customFrom}
+                    max={customTo}
+                    onChange={(e) => setCustomFrom(e.target.value)}
+                  />
+                </label>
+                <label className="block text-sm font-medium text-[var(--text)]">
+                  Hasta
+                  <input
+                    className="mt-1 h-11 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
+                    type="date"
+                    min={customFrom}
+                    max={todayString()}
+                    value={customTo}
+                    onChange={(e) => setCustomTo(e.target.value)}
+                  />
+                </label>
+              </div>
+            ) : null}
           </article>
-          <article className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5">
-            <div className="flex items-center gap-2">
-              <TrendingDown className="h-4 w-4 text-[var(--danger)]" />
-              <p className="text-xs text-[var(--text-muted)]">Gastos</p>
-            </div>
-            <p className="mt-2 text-xl font-semibold tracking-[-0.04em] text-[var(--danger)] sm:text-2xl">
-              {formatCurrency(rangeData?.recordedExpenses ?? 0)}
-            </p>
-          </article>
-          <article className="col-span-2 rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-4 sm:col-span-1 sm:p-5">
-            <div className="flex items-center gap-2">
-              <DollarSign
-                className={`h-4 w-4 ${
+
+          <section className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <article className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-[var(--success)]" />
+                <p className="text-xs text-[var(--text-muted)]">Ingresos</p>
+              </div>
+              <p className="mt-2 text-xl font-semibold tracking-[-0.04em] text-[var(--success)] sm:text-2xl">
+                {formatCurrency(rangeData?.completedIncome ?? 0)}
+              </p>
+            </article>
+            <article className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5">
+              <div className="flex items-center gap-2">
+                <TrendingDown className="h-4 w-4 text-[var(--danger)]" />
+                <p className="text-xs text-[var(--text-muted)]">Gastos</p>
+              </div>
+              <p className="mt-2 text-xl font-semibold tracking-[-0.04em] text-[var(--danger)] sm:text-2xl">
+                {formatCurrency(rangeData?.recordedExpenses ?? 0)}
+              </p>
+            </article>
+            <article className="col-span-2 rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-4 sm:col-span-1 sm:p-5">
+              <div className="flex items-center gap-2">
+                <TrendingUp
+                  className={`h-4 w-4 ${
+                    rangeData?.balance != null && rangeData.balance >= 0
+                      ? "text-[var(--success)]"
+                      : "text-[var(--accent)]"
+                  }`}
+                />
+                <p className="text-xs text-[var(--text-muted)]">Balance</p>
+              </div>
+              <p
+                className={`mt-2 text-xl font-semibold tracking-[-0.04em] sm:text-2xl ${
                   rangeData?.balance != null && rangeData.balance >= 0
-                    ? "text-[var(--success)]"
+                    ? "text-[var(--text)]"
                     : "text-[var(--accent)]"
                 }`}
-              />
-              <p className="text-xs text-[var(--text-muted)]">Balance</p>
+              >
+                {formatCurrency(rangeData?.balance ?? 0)}
+              </p>
+            </article>
+          </section>
+
+          {chartData.length > 1 ? (
+            <article className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-4 sm:rounded-[2rem] sm:p-5">
+              <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-subtle)] sm:text-sm">
+                <Calendar className="h-4 w-4" />
+                Ingresos vs Gastos diarios
+              </p>
+              <div className="mt-4 h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: 11, fill: "var(--text-subtle)" }}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: "var(--text-subtle)" }}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={(value: number) => `${value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value}`}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: "var(--surface)",
+                        border: "1px solid var(--border)",
+                        borderRadius: "1rem",
+                        fontSize: "12px",
+                      }}
+                      formatter={(value) => [`${Math.abs(Number(value ?? 0)).toFixed(0)} CUP`, ""]}
+                    />
+                    <Line type="monotone" dataKey="Ingresos" stroke={CHART_COLORS[0]} strokeWidth={2} dot={{ r: 3, fill: CHART_COLORS[0] }} />
+                    <Line type="monotone" dataKey="Gastos" stroke={CHART_COLORS[1]} strokeWidth={2} dot={{ r: 3, fill: CHART_COLORS[1] }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </article>
+          ) : null}
+
+          {incomeBreakdownData.length > 0 || expenseBreakdownData.length > 0 ? (
+            <article className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-4 sm:rounded-[2rem] sm:p-5">
+              <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-subtle)] sm:text-sm">
+                <Receipt className="h-4 w-4" />
+                Desglose por categoria
+              </p>
+              {incomeBreakdownData.length > 0 ? (
+                <div className="mt-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)] mb-2">Ingresos</p>
+                  <div className="h-48">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={incomeBreakdownData} layout="vertical" margin={{ left: 80, right: 20, top: 5, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                        <XAxis type="number" tick={{ fontSize: 10, fill: "var(--text-subtle)" }} tickLine={false} axisLine={false} />
+                        <YAxis dataKey="category" type="category" tick={{ fontSize: 10, fill: "var(--text)" }} tickLine={false} axisLine={false} width={75} />
+                        <Tooltip
+                          contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "1rem", fontSize: "12px" }}
+                          formatter={(value) => [`${Number(value ?? 0).toFixed(0)} CUP`, ""]}
+                        />
+                        <Line type="monotone" dataKey="amount" stroke={CHART_COLORS[0]} strokeWidth={2} dot={{ r: 4, fill: CHART_COLORS[0] }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              ) : null}
+              {expenseBreakdownData.length > 0 ? (
+                <div className={incomeBreakdownData.length > 0 ? "mt-5" : "mt-4"}>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)] mb-2">Gastos</p>
+                  <div className="h-48">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={expenseBreakdownData} layout="vertical" margin={{ left: 80, right: 20, top: 5, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                        <XAxis type="number" tick={{ fontSize: 10, fill: "var(--text-subtle)" }} tickLine={false} axisLine={false} />
+                        <YAxis dataKey="category" type="category" tick={{ fontSize: 10, fill: "var(--text)" }} tickLine={false} axisLine={false} width={75} />
+                        <Tooltip
+                          contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "1rem", fontSize: "12px" }}
+                          formatter={(value) => [`${Number(value ?? 0).toFixed(0)} CUP`, ""]}
+                        />
+                        <Line type="monotone" dataKey="amount" stroke={CHART_COLORS[1]} strokeWidth={2} dot={{ r: 4, fill: CHART_COLORS[1] }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              ) : null}
+            </article>
+          ) : null}
+
+          <article className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-4 sm:rounded-[2rem] sm:p-5">
+            <div className="flex items-center justify-between gap-3">
+              <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-subtle)] sm:text-sm">
+                <Receipt className="h-4 w-4" />
+                Gastos en este periodo
+              </p>
+              {isMobileViewport ? (
+                <button
+                  className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--accent)] text-white transition hover:bg-[var(--accent-hover)]"
+                  type="button"
+                  onClick={handleOpenNewExpense}
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              ) : null}
             </div>
-            <p
-              className={`mt-2 text-xl font-semibold tracking-[-0.04em] sm:text-2xl ${
-                rangeData?.balance != null && rangeData.balance >= 0
-                  ? "text-[var(--text)]"
-                  : "text-[var(--accent)]"
-              }`}
-            >
-              {formatCurrency(rangeData?.balance ?? 0)}
-            </p>
+            <div className="mt-4 space-y-2">
+              {expenses.length ? (
+                expenses.map((expense) => (
+                  <article key={expense.id} className="min-w-0 overflow-hidden rounded-[1.2rem] bg-[var(--surface-muted)] p-3.5 sm:p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-subtle)] sm:text-xs truncate">
+                          {expense.expenseCategoryName ?? "Sin categoria"}
+                        </p>
+                        <p className="mt-1 truncate text-sm text-[var(--text)]">{expense.description}</p>
+                        <p className="mt-1.5 flex items-center gap-1 text-[10px] text-[var(--text-subtle)] sm:text-xs">
+                          <Calendar className="h-3 w-3" />
+                          <span className="inline-block h-1 w-1 rounded-full bg-[var(--text-subtle)]" />
+                          {expense.expenseDate}
+                        </p>
+                        {expense.notes ? (
+                          <p className="mt-1 text-xs text-[var(--text-subtle)] break-words">{expense.notes}</p>
+                        ) : null}
+                      </div>
+                      <p className="shrink-0 rounded-full bg-[var(--surface)] px-3 py-1 text-xs font-semibold text-[var(--accent)] sm:text-sm">
+                        -{formatCurrency(expense.amount)}
+                      </p>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <div className="flex flex-col items-center justify-center gap-2 rounded-[1.2rem] bg-[var(--surface-muted)] py-8">
+                  <Receipt className="h-8 w-8 text-[var(--text-subtle)]" />
+                  <p className="text-sm text-[var(--text-muted)]">No hay gastos en este periodo.</p>
+                </div>
+              )}
+            </div>
           </article>
         </section>
 
-        {chartData.length > 1 ? (
+        <section className="hidden gap-4 lg:grid">
           <article className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-4 sm:rounded-[2rem] sm:p-5">
-            <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-subtle)] sm:text-sm">
-              <Calendar className="h-4 w-4" />
-              Ingresos vs Gastos diarios
+            <p className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
+              <Plus className="h-4 w-4" />
+              Registrar gasto
             </p>
-            <div className="mt-4 h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} barGap={2}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis
-                    dataKey="label"
-                    tick={{ fontSize: 11, fill: "var(--text-subtle)" }}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 11, fill: "var(--text-subtle)" }}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(value: number) => `${value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value}`}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      background: "var(--surface)",
-                      border: "1px solid var(--border)",
-                      borderRadius: "1rem",
-                      fontSize: "12px",
-                    }}
-                    formatter={(value) => [`${Math.abs(Number(value ?? 0)).toFixed(0)} CUP`, ""]}
-                  />
-                  <Bar dataKey="Ingresos" fill="var(--success)" radius={[6, 6, 0, 0]} />
-                  <Bar dataKey="Gastos" fill="var(--danger)" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="mt-4">{expenseFormContent}</div>
+          </article>
+
+          <article className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-4 sm:rounded-[2rem] sm:p-5">
+            <p className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.2em] text-[var(--text-subtle)]">
+              Nueva categoria
+            </p>
+            <div className="mt-4 space-y-4">
+              <input
+                className="h-11 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
+                placeholder="Nombre de la categoria"
+                value={categoryName}
+                onChange={(e) => setCategoryName(e.target.value)}
+              />
+              <button
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--secondary-btn)] px-4 text-sm font-semibold text-[var(--text)] transition hover:bg-[var(--secondary-btn-hover)]"
+                type="button"
+                onClick={() => void handleCreateCategory()}
+                disabled={isSubmitting}
+              >
+                <Plus className="h-4 w-4" />
+                Guardar categoria
+              </button>
             </div>
           </article>
-        ) : null}
+        </section>
+      </main>
 
-        <article className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-4 sm:rounded-[2rem] sm:p-5">
-          <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-subtle)] sm:text-sm">
-            <Receipt className="h-4 w-4" />
-            Gastos en este periodo
-          </p>
-          <div className="mt-4 space-y-2">
-            {expenses.length ? (
-              expenses.map((expense) => (
-                <article key={expense.id} className="rounded-[1.2rem] bg-[var(--surface-muted)] p-3.5 sm:p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-subtle)] sm:text-xs">
-                        {expense.expenseCategoryName ?? "Sin categoria"}
-                      </p>
-                      <p className="mt-1 truncate text-sm text-[var(--text)]">{expense.description}</p>
-                      <p className="mt-1.5 flex items-center gap-1 text-[10px] text-[var(--text-subtle)] sm:text-xs">
-                        <Calendar className="h-3 w-3" />
-                        <span className="inline-block h-1 w-1 rounded-full bg-[var(--text-subtle)]" />
-                        {expense.expenseDate}
-                      </p>
-                      {expense.notes ? (
-                        <p className="mt-1 text-xs text-[var(--text-subtle)]">{expense.notes}</p>
-                      ) : null}
-                    </div>
-                    <p className="shrink-0 rounded-full bg-[var(--surface)] px-3 py-1 text-xs font-semibold text-[var(--accent)] sm:text-sm">
-                      -{formatCurrency(expense.amount)}
-                    </p>
-                  </div>
-                </article>
-              ))
-            ) : (
-              <div className="flex flex-col items-center justify-center gap-2 rounded-[1.2rem] bg-[var(--surface-muted)] py-8">
-                <Receipt className="h-8 w-8 text-[var(--text-subtle)]" />
-                <p className="text-sm text-[var(--text-muted)]">No hay gastos en este periodo.</p>
-              </div>
-            )}
-          </div>
-        </article>
-      </section>
-
-      <section className="grid gap-4">
-        <article className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-4 sm:rounded-[2rem] sm:p-5">
-          <p className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
-            <Plus className="h-4 w-4" />
-            Registrar gasto
-          </p>
-          <div className="mt-4 space-y-4">
-            <label className="block text-sm font-medium text-[var(--text)]">
-              Categoria
-              <select
-                className="mt-2 h-11 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
-                value={draft.expenseCategoryId}
-                onChange={(e) => setDraft((c) => ({ ...c, expenseCategoryId: e.target.value }))}
-              >
-                <option value="">Sin categoria</option>
-                {activeCategories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-sm font-medium text-[var(--text)]">
-              Detalle
-              <input
-                className="mt-2 h-11 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
-                value={draft.detail}
-                onChange={(e) => setDraft((c) => ({ ...c, detail: e.target.value }))}
-              />
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <label className="block text-sm font-medium text-[var(--text)]">
-                Monto (CUP)
-                <input
-                  className="mt-2 h-11 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
-                  inputMode="numeric"
-                  value={draft.amount}
-                  onChange={(e) => setDraft((c) => ({ ...c, amount: e.target.value }))}
-                />
-              </label>
-              <label className="block text-sm font-medium text-[var(--text)]">
-                Fecha
-                <input
-                  className="mt-2 h-11 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
-                  type="date"
-                  min={from}
-                  max={to}
-                  value={
-                    draft.expenseDate < from || draft.expenseDate > to
-                      ? from
-                      : draft.expenseDate
-                  }
-                  onChange={(e) => setDraft((c) => ({ ...c, expenseDate: e.target.value }))}
-                />
-              </label>
-            </div>
-            <label className="block text-sm font-medium text-[var(--text)]">
-              Notas
-              <textarea
-                className="mt-2 h-20 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 py-3 text-sm"
-                value={draft.notes}
-                onChange={(e) => setDraft((c) => ({ ...c, notes: e.target.value }))}
-              />
-            </label>
-            <button
-              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-hover)] disabled:bg-[var(--text-subtle)]"
-              type="button"
-              onClick={() => void handleCreateExpense()}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Guardando...
-                </>
-              ) : (
-                <>
-                  <Check className="h-4 w-4" />
-                  Guardar gasto
-                </>
-              )}
-            </button>
-          </div>
-        </article>
-
-        <article className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-4 sm:rounded-[2rem] sm:p-5">
-          <p className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.2em] text-[var(--text-subtle)]">
-            <Tag className="h-4 w-4" />
-            Nueva categoria
-          </p>
-          <div className="mt-4 space-y-4">
-            <input
-              className="h-11 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
-              placeholder="Nombre de la categoria"
-              value={categoryName}
-              onChange={(e) => setCategoryName(e.target.value)}
-            />
-            <button
-              className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--secondary-btn)] px-4 text-sm font-semibold text-[var(--text)] transition hover:bg-[var(--secondary-btn-hover)]"
-              type="button"
-              onClick={() => void handleCreateCategory()}
-              disabled={isSubmitting}
-            >
-              <Plus className="h-4 w-4" />
-              Guardar categoria
-            </button>
-          </div>
-        </article>
-
-        <article className="rounded-[1.5rem] bg-[var(--surface-inverse)] p-4 text-[var(--text-on-dark)] sm:rounded-[2rem] sm:p-5">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--text-on-dark)]/85">Regla de negocio</p>
-          <p className="mt-3 text-xs leading-6 text-[var(--text-subtle)] sm:text-sm">
-            Una cita confirmada no cuenta como ingreso. Solo entra al balance al marcarse como completada.
-          </p>
-        </article>
-      </section>
-    </main>
+      <AdminMobileSheet
+        open={showMobileExpenseForm}
+        onClose={() => setShowMobileExpenseForm(false)}
+      >
+        {expenseFormContent}
+      </AdminMobileSheet>
+    </>
   );
 }

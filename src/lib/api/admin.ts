@@ -3,6 +3,7 @@ import type {
   AppointmentResponse,
   BusinessHourResponse,
   BusinessProfileResponse,
+  CategoryBreakdownResponse,
   ClientResponse,
   CreateAppointmentRequest,
   CreateExpenseCategoryRequest,
@@ -266,6 +267,14 @@ export function getAdminFinanceHistory(accessToken: string, months: number) {
 export function getAdminRangeFinanceSummary(accessToken: string, from: string, to: string) {
   const query = new URLSearchParams({ from, to }).toString();
   return adminFetch<RangeFinanceResponse>(`/admin/finance/range-summary?${query}`, {
+    accessToken,
+    method: "GET",
+  });
+}
+
+export function getAdminCategoryBreakdown(accessToken: string, from: string, to: string) {
+  const query = new URLSearchParams({ from, to }).toString();
+  return adminFetch<CategoryBreakdownResponse>(`/admin/finance/category-breakdown?${query}`, {
     accessToken,
     method: "GET",
   });
