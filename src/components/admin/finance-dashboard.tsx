@@ -115,7 +115,7 @@ const CHART_COLORS = [
 
 export function FinanceDashboard() {
   const { accessToken, refresh, status } = useAdminSession();
-  const [activeFilter, setActiveFilter] = useState<DateFilter>("month");
+  const [activeFilter, setActiveFilter] = useState<DateFilter>("week");
   const [customFrom, setCustomFrom] = useState(daysAgo(6));
   const [customTo, setCustomTo] = useState(todayString());
   const [rangeData, setRangeData] = useState<RangeFinanceResponse | null>(null);
@@ -134,6 +134,7 @@ export function FinanceDashboard() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [showMobileExpenseForm, setShowMobileExpenseForm] = useState(false);
+  const [expensesExpanded, setExpensesExpanded] = useState(false);
 
   const { from, to } = getFilterRange(activeFilter, customFrom, customTo);
   const activeCategories = useMemo(
@@ -404,7 +405,7 @@ export function FinanceDashboard() {
                       : "bg-[var(--surface-muted)] text-[var(--text-muted)]"
                   }`}
                   type="button"
-                  onClick={() => setActiveFilter(filter)}
+                  onClick={() => { setActiveFilter(filter); setExpensesExpanded(false); }}
                 >
                   {FILTER_LABELS[filter]}
                 </button>
@@ -480,6 +481,47 @@ export function FinanceDashboard() {
             </article>
           </section>
 
+          {incomeBreakdownData.length > 0 || expenseBreakdownData.length > 0 ? (
+            <article className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-4 sm:rounded-[2rem] sm:p-5">
+              <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-subtle)] sm:text-sm">
+                <Receipt className="h-4 w-4" />
+                Desglose por categoria
+              </p>
+              {incomeBreakdownData.length > 0 ? (
+                <div className="mt-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)] mb-3">Ingresos</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {incomeBreakdownData.map((entry, i) => (
+                      <div key={entry.category} className="flex items-center justify-between gap-3 rounded-[1.2rem] bg-[var(--surface-muted)] px-4 py-3.5">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
+                          <span className="truncate text-sm font-semibold text-[var(--text)]">{entry.category}</span>
+                        </div>
+                        <span className="shrink-0 text-sm font-bold text-[var(--text)]">{formatCurrency(entry.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {expenseBreakdownData.length > 0 ? (
+                <div className={incomeBreakdownData.length > 0 ? "mt-5" : "mt-4"}>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)] mb-3">Gastos</p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {expenseBreakdownData.map((entry, i) => (
+                      <div key={entry.category} className="flex items-center justify-between gap-3 rounded-[1.2rem] bg-[var(--surface-muted)] px-4 py-3.5">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: CHART_COLORS[(i + 1) % CHART_COLORS.length] }} />
+                          <span className="truncate text-sm font-semibold text-[var(--text)]">{entry.category}</span>
+                        </div>
+                        <span className="shrink-0 text-sm font-bold text-[var(--danger)]">{formatCurrency(entry.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </article>
+          ) : null}
+
           {chartData.length > 1 ? (
             <article className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-4 sm:rounded-[2rem] sm:p-5">
               <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-subtle)] sm:text-sm">
@@ -511,8 +553,8 @@ export function FinanceDashboard() {
                       }}
                       formatter={(value) => [`${Math.abs(Number(value ?? 0)).toFixed(0)} CUP`, ""]}
                     />
-                    <Line type="monotone" dataKey="Ingresos" stroke={CHART_COLORS[0]} strokeWidth={2} dot={{ r: 3, fill: CHART_COLORS[0] }} />
-                    <Line type="monotone" dataKey="Gastos" stroke={CHART_COLORS[1]} strokeWidth={2} dot={{ r: 3, fill: CHART_COLORS[1] }} />
+                    <Line type="natural" dataKey="Ingresos" stroke={CHART_COLORS[0]} strokeWidth={2.5} dot={false} />
+                    <Line type="natural" dataKey="Gastos" stroke={CHART_COLORS[1]} strokeWidth={2.5} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -584,29 +626,40 @@ export function FinanceDashboard() {
             </div>
             <div className="mt-4 space-y-2">
               {expenses.length ? (
-                expenses.map((expense) => (
-                  <article key={expense.id} className="min-w-0 overflow-hidden rounded-[1.2rem] bg-[var(--surface-muted)] p-3.5 sm:p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-subtle)] sm:text-xs truncate">
-                          {expense.expenseCategoryName ?? "Sin categoria"}
+                <>
+                  {(expensesExpanded ? expenses : expenses.slice(0, 3)).map((expense) => (
+                    <article key={expense.id} className="min-w-0 overflow-hidden rounded-[1.2rem] bg-[var(--surface-muted)] p-3.5 sm:p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--text-subtle)] sm:text-xs truncate">
+                            {expense.expenseCategoryName ?? "Sin categoria"}
+                          </p>
+                          <p className="mt-1 truncate text-sm text-[var(--text)]">{expense.description}</p>
+                          <p className="mt-1.5 flex items-center gap-1 text-[10px] text-[var(--text-subtle)] sm:text-xs">
+                            <Calendar className="h-3 w-3" />
+                            <span className="inline-block h-1 w-1 rounded-full bg-[var(--text-subtle)]" />
+                            {expense.expenseDate}
+                          </p>
+                          {expense.notes ? (
+                            <p className="mt-1 text-xs text-[var(--text-subtle)] break-words">{expense.notes}</p>
+                          ) : null}
+                        </div>
+                        <p className="shrink-0 rounded-full bg-[var(--surface)] px-3 py-1 text-xs font-semibold text-[var(--accent)] sm:text-sm">
+                          -{formatCurrency(expense.amount)}
                         </p>
-                        <p className="mt-1 truncate text-sm text-[var(--text)]">{expense.description}</p>
-                        <p className="mt-1.5 flex items-center gap-1 text-[10px] text-[var(--text-subtle)] sm:text-xs">
-                          <Calendar className="h-3 w-3" />
-                          <span className="inline-block h-1 w-1 rounded-full bg-[var(--text-subtle)]" />
-                          {expense.expenseDate}
-                        </p>
-                        {expense.notes ? (
-                          <p className="mt-1 text-xs text-[var(--text-subtle)] break-words">{expense.notes}</p>
-                        ) : null}
                       </div>
-                      <p className="shrink-0 rounded-full bg-[var(--surface)] px-3 py-1 text-xs font-semibold text-[var(--accent)] sm:text-sm">
-                        -{formatCurrency(expense.amount)}
-                      </p>
-                    </div>
-                  </article>
-                ))
+                    </article>
+                  ))}
+                  {expenses.length > 3 ? (
+                    <button
+                      className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-xl bg-[var(--secondary-btn)] text-xs font-semibold text-[var(--text)] transition hover:bg-[var(--secondary-btn-hover)]"
+                      type="button"
+                      onClick={() => setExpensesExpanded((v) => !v)}
+                    >
+                      {expensesExpanded ? "Ver menos" : `Ver mas (${expenses.length - 3} mas)`}
+                    </button>
+                  ) : null}
+                </>
               ) : (
                 <div className="flex flex-col items-center justify-center gap-2 rounded-[1.2rem] bg-[var(--surface-muted)] py-8">
                   <Receipt className="h-8 w-8 text-[var(--text-subtle)]" />
