@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
 
 import { AdminMobileSheet } from "@/components/admin/admin-mobile-sheet";
 import { useAdminSession } from "@/components/admin/admin-session-provider";
@@ -16,6 +16,7 @@ import {
 import { ApiError } from "@/lib/api/http";
 import type { ServiceResponse, UpsertServiceRequest } from "@/lib/api/types";
 import { formatDuration, formatPrice } from "@/lib/site-content";
+import { toast } from "@/lib/toast";
 
 const defaultCategoryNames = ["Brows", "Lashes"] as const;
 
@@ -33,11 +34,6 @@ function emptyDraft(category: string = "Brows"): ServiceDraft {
     isActive: true,
     sortOrder: 0,
   };
-}
-
-function getErrorMessage(error: unknown, fallbackMessage: string) {
-  if (error instanceof ApiError) return error.message;
-  return fallbackMessage;
 }
 
 async function withRefreshedToken<T>(
@@ -78,145 +74,149 @@ function ServiceForm({
   isDeleting?: boolean;
 }) {
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
-          {editingServiceId ? "Editar servicio" : "Nuevo servicio"}
-        </p>
-        <button
-          aria-label="Cerrar formulario"
-          className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--surface-muted)] text-[var(--text-muted)] transition hover:bg-[var(--secondary-btn)]"
-          type="button"
-          onClick={onCancel}
-        >
-          <X className="h-4 w-4" />
-        </button>
+    <div className="flex h-full flex-col">
+      <div className="shrink-0">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
+            {editingServiceId ? "Editar servicio" : "Nuevo servicio"}
+          </p>
+          <button
+            aria-label="Cerrar formulario"
+            className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--surface-muted)] text-[var(--text-muted)] transition hover:bg-[var(--secondary-btn)]"
+            type="button"
+            onClick={onCancel}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
-      <label className="block text-sm font-medium text-[var(--text)]">
-        Categoria
-        <select
-          className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
-          value={draft.category}
-          onChange={(event) =>
-            setDraft((current) => ({ ...current, category: event.target.value }))
-          }
-        >
-          {categoryNames.map((category) => (
-            <option key={category} value={category}>
-              {category}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label className="block text-sm font-medium text-[var(--text)]">
-        Nombre
-        <input
-          className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
-          value={draft.name}
-          onChange={(event) =>
-            setDraft((current) => ({ ...current, name: event.target.value }))
-          }
-          placeholder="Nombre del servicio"
-        />
-      </label>
-
-      <label className="block text-sm font-medium text-[var(--text)]">
-        Descripcion
-        <textarea
-          className="mt-2 min-h-24 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 py-3 text-sm"
-          value={draft.description ?? ""}
-          onChange={(event) =>
-            setDraft((current) => ({ ...current, description: event.target.value || null }))
-          }
-        />
-      </label>
-
-      <label className="block text-sm font-medium text-[var(--text)]">
-        Precio base (CUP)
-        <input
-          className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
-          inputMode="numeric"
-          type="number"
-          value={draft.basePrice}
-          onChange={(event) =>
-            setDraft((current) => ({ ...current, basePrice: Number(event.target.value) }))
-          }
-        />
-      </label>
-
-      <label className="block text-sm font-medium text-[var(--text)]">
-        Duracion (minutos)
-        <input
-          className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
-          inputMode="numeric"
-          type="number"
-          value={draft.durationMinutes}
-          onChange={(event) =>
-            setDraft((current) => ({ ...current, durationMinutes: Number(event.target.value) }))
-          }
-        />
-      </label>
-
-      <label className="block text-sm font-medium text-[var(--text)]">
-        Orden visual
-        <input
-          className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
-          inputMode="numeric"
-          type="number"
-          value={draft.sortOrder}
-          onChange={(event) =>
-            setDraft((current) => ({ ...current, sortOrder: Number(event.target.value) }))
-          }
-        />
-      </label>
-
-      <label className="flex items-center gap-3 text-sm font-medium text-[var(--text)]">
-        <input
-          checked={draft.supportsTouchUp}
-          type="checkbox"
-          className="h-4 w-4 rounded accent-[var(--accent)]"
-          onChange={(event) =>
-            setDraft((current) => ({ ...current, supportsTouchUp: event.target.checked }))
-          }
-        />
-        Soporta retoque
-      </label>
-
-      {draft.supportsTouchUp ? (
+      <div className="min-h-0 flex-1 overflow-y-auto space-y-4 pt-4">
         <label className="block text-sm font-medium text-[var(--text)]">
-          Descuento por retoque (CUP)
+          Categoria
+          <select
+            className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
+            value={draft.category}
+            onChange={(event) =>
+              setDraft((current) => ({ ...current, category: event.target.value }))
+            }
+          >
+            {categoryNames.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block text-sm font-medium text-[var(--text)]">
+          Nombre
+          <input
+            className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
+            value={draft.name}
+            onChange={(event) =>
+              setDraft((current) => ({ ...current, name: event.target.value }))
+            }
+            placeholder="Nombre del servicio"
+          />
+        </label>
+
+        <label className="block text-sm font-medium text-[var(--text)]">
+          Descripcion
+          <textarea
+            className="mt-2 min-h-24 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 py-3 text-sm"
+            value={draft.description ?? ""}
+            onChange={(event) =>
+              setDraft((current) => ({ ...current, description: event.target.value || null }))
+            }
+          />
+        </label>
+
+        <label className="block text-sm font-medium text-[var(--text)]">
+          Precio base (CUP)
           <input
             className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
             inputMode="numeric"
             type="number"
-            value={draft.touchUpDiscount}
+            value={draft.basePrice}
             onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                touchUpDiscount: Number(event.target.value),
-              }))
+              setDraft((current) => ({ ...current, basePrice: Number(event.target.value) }))
             }
           />
         </label>
-      ) : null}
 
-      <label className="flex items-center gap-3 text-sm font-medium text-[var(--text)]">
-        <input
-          checked={draft.isActive}
-          type="checkbox"
-          className="h-4 w-4 rounded accent-[var(--accent)]"
-          onChange={(event) =>
-            setDraft((current) => ({ ...current, isActive: event.target.checked }))
-          }
-        />
-        Activo
-      </label>
+        <label className="block text-sm font-medium text-[var(--text)]">
+          Duracion (minutos)
+          <input
+            className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
+            inputMode="numeric"
+            type="number"
+            value={draft.durationMinutes}
+            onChange={(event) =>
+              setDraft((current) => ({ ...current, durationMinutes: Number(event.target.value) }))
+            }
+          />
+        </label>
 
-      <div className="flex flex-col gap-2 sm:flex-row">
+        <label className="block text-sm font-medium text-[var(--text)]">
+          Orden visual
+          <input
+            className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
+            inputMode="numeric"
+            type="number"
+            value={draft.sortOrder}
+            onChange={(event) =>
+              setDraft((current) => ({ ...current, sortOrder: Number(event.target.value) }))
+            }
+          />
+        </label>
+
+        <label className="flex items-center gap-3 text-sm font-medium text-[var(--text)]">
+          <input
+            checked={draft.supportsTouchUp}
+            type="checkbox"
+            className="h-4 w-4 rounded accent-[var(--accent)]"
+            onChange={(event) =>
+              setDraft((current) => ({ ...current, supportsTouchUp: event.target.checked }))
+            }
+          />
+          Soporta retoque
+        </label>
+
+        {draft.supportsTouchUp ? (
+          <label className="block text-sm font-medium text-[var(--text)]">
+            Descuento por retoque (CUP)
+            <input
+              className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
+              inputMode="numeric"
+              type="number"
+              value={draft.touchUpDiscount}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  touchUpDiscount: Number(event.target.value),
+                }))
+              }
+            />
+          </label>
+        ) : null}
+
+        <label className="flex items-center gap-3 text-sm font-medium text-[var(--text)]">
+          <input
+            checked={draft.isActive}
+            type="checkbox"
+            className="h-4 w-4 rounded accent-[var(--accent)]"
+            onChange={(event) =>
+              setDraft((current) => ({ ...current, isActive: event.target.checked }))
+            }
+          />
+          Activo
+        </label>
+      </div>
+
+      <div className="shrink-0 flex gap-2 pt-4 border-t border-[var(--secondary-btn)]">
         <button
-          className="inline-flex h-11 flex-1 items-center justify-center rounded-2xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-hover)] disabled:opacity-50"
+          className="inline-flex h-11 flex-1 items-center justify-center rounded-2xl bg-[var(--accent)] px-3 text-sm font-semibold text-white transition hover:bg-[var(--accent-hover)] disabled:opacity-50"
           type="button"
           onClick={onSave}
           disabled={isSubmitting || !draft.name.trim() || draft.basePrice <= 0}
@@ -228,7 +228,7 @@ function ServiceForm({
               : "Crear servicio"}
         </button>
         <button
-          className="inline-flex h-11 items-center justify-center rounded-2xl bg-[var(--secondary-btn)] px-4 text-sm font-semibold text-[var(--text)] transition hover:bg-[var(--secondary-btn-hover)]"
+          className="inline-flex h-11 flex-1 items-center justify-center rounded-2xl bg-[var(--secondary-btn)] px-3 text-sm font-semibold text-[var(--text)] transition hover:bg-[var(--secondary-btn-hover)]"
           type="button"
           onClick={onCancel}
         >
@@ -236,7 +236,7 @@ function ServiceForm({
         </button>
         {onDelete ? (
           <button
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-[rgba(145,145,140,0.35)] px-4 text-sm font-semibold text-[var(--text-muted)] transition hover:bg-[var(--surface-muted)] disabled:opacity-50"
+            className="inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-2xl border border-[rgba(145,145,140,0.35)] px-3 text-sm font-semibold text-[var(--text-muted)] transition hover:bg-[var(--surface-muted)] disabled:opacity-50"
             type="button"
             onClick={onDelete}
             disabled={isDeleting}
@@ -265,6 +265,7 @@ function CategoryManager({
   serviceCountByCategory: Record<string, number>;
   isSaving: boolean;
 }) {
+  const [isExpanded, setIsExpanded] = useState(false);
   const [newName, setNewName] = useState("");
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingName, setEditingName] = useState("");
@@ -298,106 +299,125 @@ function CategoryManager({
 
   return (
     <article className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--text-subtle)]">Categorias</p>
-        <span className="text-xs text-[var(--text-muted)]">
-          {categoryNames.length} categoria{categoryNames.length !== 1 ? "s" : ""}
-        </span>
-      </div>
-
-      <div className="mt-3 space-y-2">
-        {categoryNames.map((category, index) => {
-          const count = serviceCountByCategory[category] ?? 0;
-
-          return (
-            <div
-              key={category}
-              className="flex items-center justify-between gap-2 rounded-[1.2rem] bg-[var(--surface-muted)] px-4 py-2.5"
-            >
-              {editingIndex === index ? (
-                <div className="flex flex-1 items-center gap-2">
-                  <input
-                    autoFocus
-                    className="h-9 flex-1 rounded-xl border border-[var(--border-input)] bg-[var(--surface)] px-3 text-sm"
-                    value={editingName}
-                    onChange={(event) => setEditingName(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") handleSaveRename();
-                      if (event.key === "Escape") handleCancelRename();
-                    }}
-                  />
-                  <button
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--accent)] text-white text-xs font-semibold"
-                    type="button"
-                    onClick={handleSaveRename}
-                  >
-                    OK
-                  </button>
-                  <button
-                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--secondary-btn)] text-xs font-semibold text-[var(--text)]"
-                    type="button"
-                    onClick={handleCancelRename}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <span className="min-w-0 truncate text-sm font-semibold text-[var(--text)]">{category}</span>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <span className="text-xs text-[var(--text-subtle)]">{count}</span>
-                    <button
-                      className="flex h-8 w-8 items-center justify-center rounded-xl text-[var(--text-muted)] transition hover:bg-[var(--secondary-btn)]"
-                      type="button"
-                      onClick={() => handleStartRename(index)}
-                      aria-label={`Editar categoria ${category}`}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    {count === 0 ? (
-                      <button
-                        className="flex h-8 w-8 items-center justify-center rounded-xl text-[var(--text-muted)] transition hover:bg-[var(--danger-bg)] hover:text-[var(--danger)]"
-                        type="button"
-                        onClick={() => onRemoveCategory(index)}
-                        aria-label={`Eliminar categoria ${category}`}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    ) : null}
-                  </div>
-                </>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="mt-3 flex gap-2">
-        <input
-          className="h-10 flex-1 rounded-xl border border-[var(--border-input)] bg-[var(--surface)] px-3 text-sm"
-          placeholder="Nueva categoria"
-          value={newName}
-          onChange={(event) => setNewName(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") handleAdd();
-          }}
-        />
-        <button
-          className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-[var(--accent)] px-3 text-xs font-semibold text-white transition hover:bg-[var(--accent-hover)] disabled:opacity-40"
-          type="button"
-          onClick={handleAdd}
-          disabled={!newName.trim() || isSaving}
-        >
-          <Plus className="h-4 w-4" />
-          Agregar
-        </button>
-      </div>
-
-      {isSaving ? (
-        <p className="mt-2 flex items-center gap-1.5 text-xs text-[var(--text-subtle)]">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          Guardando...
+      <button
+        className="flex w-full items-center justify-between gap-3 text-left"
+        type="button"
+        onClick={() => setIsExpanded((v) => !v)}
+      >
+        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--text-subtle)]">
+          Categorias
         </p>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-[var(--text-muted)]">
+            {categoryNames.length}
+          </span>
+          {isExpanded ? (
+            <ChevronDown className="h-4 w-4 text-[var(--text-subtle)]" />
+          ) : (
+            <ChevronRight className="h-4 w-4 text-[var(--text-subtle)]" />
+          )}
+        </div>
+      </button>
+
+      {isExpanded ? (
+        <>
+          <div className="mt-3 space-y-2">
+            {categoryNames.map((category, index) => {
+              const count = serviceCountByCategory[category] ?? 0;
+
+              return (
+                <div
+                  key={category}
+                  className="flex items-center justify-between gap-2 rounded-[1.2rem] bg-[var(--surface-muted)] px-4 py-2.5"
+                >
+                  {editingIndex === index ? (
+                    <div className="flex flex-1 min-w-0 items-center gap-2">
+                      <input
+                        autoFocus
+                        className="h-9 flex-1 min-w-0 rounded-xl border border-[var(--border-input)] bg-[var(--surface)] px-3 text-sm"
+                        value={editingName}
+                        onChange={(event) => setEditingName(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") handleSaveRename();
+                          if (event.key === "Escape") handleCancelRename();
+                        }}
+                      />
+                      <button
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--accent)] text-white text-xs font-semibold"
+                        type="button"
+                        onClick={handleSaveRename}
+                      >
+                        OK
+                      </button>
+                      <button
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--secondary-btn)] text-xs font-semibold text-[var(--text)]"
+                        type="button"
+                        onClick={handleCancelRename}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="min-w-0 truncate text-sm font-semibold text-[var(--text)]">
+                        {category}
+                      </span>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <span className="text-xs text-[var(--text-subtle)]">{count}</span>
+                        <button
+                          className="flex h-8 w-8 items-center justify-center rounded-xl text-[var(--text-muted)] transition hover:bg-[var(--secondary-btn)]"
+                          type="button"
+                          onClick={() => handleStartRename(index)}
+                          aria-label={`Editar categoria ${category}`}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        {count === 0 ? (
+                          <button
+                            className="flex h-8 w-8 items-center justify-center rounded-xl text-[var(--text-muted)] transition hover:bg-[var(--danger-bg)] hover:text-[var(--danger)]"
+                            type="button"
+                            onClick={() => onRemoveCategory(index)}
+                            aria-label={`Eliminar categoria ${category}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        ) : null}
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-3 flex gap-2">
+            <input
+              className="h-10 flex-1 min-w-0 rounded-xl border border-[var(--border-input)] bg-[var(--surface)] px-3 text-sm"
+              placeholder="Nueva categoria"
+              value={newName}
+              onChange={(event) => setNewName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") handleAdd();
+              }}
+            />
+            <button
+              className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-[var(--accent)] px-3 text-xs font-semibold text-white transition hover:bg-[var(--accent-hover)] disabled:opacity-40"
+              type="button"
+              onClick={handleAdd}
+              disabled={!newName.trim() || isSaving}
+            >
+              <Plus className="h-4 w-4" />
+              Agregar
+            </button>
+          </div>
+
+          {isSaving ? (
+            <p className="mt-2 flex items-center gap-1.5 text-xs text-[var(--text-subtle)]">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Guardando...
+            </p>
+          ) : null}
+        </>
       ) : null}
     </article>
   );
@@ -413,8 +433,6 @@ export function ServicesEditor() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSavingCategories, setIsSavingCategories] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [feedbackMessage, setFeedbackMessage] = useState("");
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [showMobileForm, setShowMobileForm] = useState(false);
 
@@ -447,7 +465,6 @@ export function ServicesEditor() {
 
     async function loadData() {
       setIsLoading(true);
-      setErrorMessage("");
 
       try {
         const [nextServices, nextCategories] = await withRefreshedToken<
@@ -462,9 +479,9 @@ export function ServicesEditor() {
         if (!isMounted) return;
         setServices(nextServices.sort((a, b) => a.sortOrder - b.sortOrder));
         setCategoryNames(nextCategories);
-      } catch (error) {
+      } catch {
         if (!isMounted) return;
-        setErrorMessage(getErrorMessage(error, "No se pudieron cargar los datos."));
+        toast.error("No se pudieron cargar los datos.");
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -516,7 +533,7 @@ export function ServicesEditor() {
         upsertAdminServiceCategoryNames(currentAccessToken, categories),
       );
     } catch {
-      // Silently retry on next load
+      toast.error("No se pudieron guardar las categorias.");
     } finally {
       setIsSavingCategories(false);
     }
@@ -526,8 +543,6 @@ export function ServicesEditor() {
     if (!accessToken) return;
     const sessionAccessToken = accessToken;
     setIsSubmitting(true);
-    setFeedbackMessage("");
-    setErrorMessage("");
 
     try {
       const saved = await withRefreshedToken(sessionAccessToken, refresh, (currentAccessToken) => {
@@ -559,14 +574,14 @@ export function ServicesEditor() {
 
       setEditingServiceId(null);
       setDraft(emptyDraft(categoryNames[0] ?? "Brows"));
-      setFeedbackMessage(
+      setShowMobileForm(false);
+      toast.success(
         editingServiceId
           ? `Servicio "${saved.name}" actualizado.`
           : `Servicio "${saved.name}" creado.`,
       );
-      setShowMobileForm(false);
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error, "No se pudo guardar el servicio."));
+    } catch {
+      toast.error("No se pudo guardar el servicio.");
     } finally {
       setIsSubmitting(false);
     }
@@ -576,7 +591,6 @@ export function ServicesEditor() {
     if (!accessToken || !editingServiceId) return;
     const sessionAccessToken = accessToken;
     setIsDeleting(true);
-    setErrorMessage("");
 
     try {
       await withRefreshedToken(sessionAccessToken, refresh, (currentAccessToken) =>
@@ -584,12 +598,12 @@ export function ServicesEditor() {
       );
 
       setServices((current) => current.filter((s) => s.id !== editingServiceId));
-      setFeedbackMessage("Servicio eliminado.");
       setEditingServiceId(null);
       setDraft(emptyDraft(categoryNames[0] ?? "Brows"));
       setShowMobileForm(false);
-    } catch (error) {
-      setErrorMessage(getErrorMessage(error, "No se pudo eliminar el servicio."));
+      toast.success("Servicio eliminado.");
+    } catch {
+      toast.error("No se pudo eliminar el servicio.");
     } finally {
       setIsDeleting(false);
     }
@@ -608,8 +622,6 @@ export function ServicesEditor() {
       isActive: service.isActive,
       sortOrder: service.sortOrder,
     });
-    setErrorMessage("");
-    setFeedbackMessage("");
 
     if (isMobileViewport) {
       setShowMobileForm(true);
@@ -619,8 +631,6 @@ export function ServicesEditor() {
   function startNewService() {
     setEditingServiceId(null);
     setDraft(emptyDraft(categoryNames[0] ?? "Brows"));
-    setErrorMessage("");
-    setFeedbackMessage("");
 
     if (isMobileViewport) {
       setShowMobileForm(true);
@@ -630,8 +640,6 @@ export function ServicesEditor() {
   function cancelEditing() {
     setEditingServiceId(null);
     setDraft(emptyDraft(categoryNames[0] ?? "Brows"));
-    setErrorMessage("");
-    setFeedbackMessage("");
     setShowMobileForm(false);
   }
 
@@ -645,8 +653,8 @@ export function ServicesEditor() {
 
   return (
     <>
-      <main className="grid gap-5 lg:grid-cols-[1fr_1fr]">
-        <section className="space-y-5">
+      <main className="min-w-0 grid gap-5 lg:grid-cols-[1fr_1fr]">
+        <section className="min-w-0 space-y-5">
           <CategoryManager
             categoryNames={categoryNames}
             onAddCategory={handleAddCategory}
@@ -658,16 +666,16 @@ export function ServicesEditor() {
 
           <article className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5">
             <div className="flex items-center justify-between gap-3">
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
                   Catalogo
                 </p>
-                <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--text)]">
+                <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--text)] truncate">
                   Servicios activos e inactivos.
                 </h2>
               </div>
               <button
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-hover)]"
+                className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-hover)]"
                 type="button"
                 onClick={startNewService}
               >
@@ -675,18 +683,6 @@ export function ServicesEditor() {
                 Nuevo servicio
               </button>
             </div>
-
-            {errorMessage ? (
-              <p className="mt-4 rounded-[1.2rem] bg-[var(--danger-bg)] px-4 py-3 text-sm font-medium text-[var(--danger)]">
-                {errorMessage}
-              </p>
-            ) : null}
-
-            {feedbackMessage ? (
-              <p className="mt-4 rounded-[1.2rem] bg-[var(--success-bg)] px-4 py-3 text-sm font-medium text-[var(--success)]">
-                {feedbackMessage}
-              </p>
-            ) : null}
           </article>
 
           {activeServices.length ? (
@@ -698,20 +694,20 @@ export function ServicesEditor() {
                 {activeServices.map((service) => (
                   <div
                     key={service.id}
-                    className={`rounded-[1.4rem] px-4 py-4 ${
+                    className={`min-w-0 overflow-hidden rounded-[1.4rem] px-4 py-4 ${
                       editingServiceId === service.id && !isMobileViewport
                         ? "border border-[var(--surface-inverse)] bg-[var(--surface-inverse)] text-[var(--text-on-dark)]"
                         : "bg-[var(--surface-muted)] text-[var(--text)]"
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.16em] opacity-70">
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] opacity-70 truncate">
                           {service.category}
                         </p>
-                        <p className="mt-1 font-semibold">{service.name}</p>
+                        <p className="mt-1 font-semibold truncate">{service.name}</p>
                         <p
-                          className={`mt-1 text-sm leading-6 ${
+                          className={`mt-1 text-sm leading-6 line-clamp-2 ${
                             editingServiceId === service.id && !isMobileViewport
                               ? "text-[var(--text-subtle)]"
                               : "text-[var(--text-muted)]"
@@ -720,7 +716,7 @@ export function ServicesEditor() {
                           {service.description ?? "Sin descripcion."}
                         </p>
                       </div>
-                      <div className="text-right">
+                      <div className="shrink-0 text-right">
                         <p className="text-sm font-semibold">{formatPrice(service.basePrice)}</p>
                         <p className="mt-1 text-xs opacity-70">{formatDuration(service.durationMinutes)}</p>
                       </div>
@@ -752,20 +748,20 @@ export function ServicesEditor() {
                 {inactiveServices.map((service) => (
                   <div
                     key={service.id}
-                    className={`rounded-[1.4rem] px-4 py-4 ${
+                    className={`min-w-0 overflow-hidden rounded-[1.4rem] px-4 py-4 ${
                       editingServiceId === service.id && !isMobileViewport
                         ? "border border-[var(--surface-inverse)] bg-[var(--surface-inverse)] text-[var(--text-on-dark)]"
                         : "bg-[var(--surface-muted)] text-[var(--text)]"
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.16em] opacity-70">
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] opacity-70 truncate">
                           {service.category}
                         </p>
-                        <p className="mt-1 font-semibold">{service.name}</p>
+                        <p className="mt-1 font-semibold truncate">{service.name}</p>
                       </div>
-                      <div className="text-right">
+                      <div className="shrink-0 text-right">
                         <p className="text-sm font-semibold">{formatPrice(service.basePrice)}</p>
                       </div>
                     </div>
@@ -789,7 +785,7 @@ export function ServicesEditor() {
         </section>
 
         <section className="hidden space-y-5 lg:block">
-          <article className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5 lg:sticky lg:top-6">
+          <article className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5 lg:sticky lg:top-6 lg:max-h-[calc(100vh-8rem)] lg:overflow-hidden">
             <ServiceForm
               draft={draft}
               setDraft={setDraft}
