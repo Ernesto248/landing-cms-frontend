@@ -20,6 +20,7 @@ import {
   getAdminCategoryBreakdown,
   getAdminExpenseCategories,
   getAdminRangeFinanceSummary,
+  getAdminServiceCategoryNames,
 } from "@/lib/api/admin";
 import { ApiError } from "@/lib/api/http";
 import { getHavanaIsoDate } from "@/lib/havana-time";
@@ -122,7 +123,6 @@ export function FinanceDashboard() {
   const [breakdown, setBreakdown] = useState<CategoryBreakdownResponse | null>(null);
   const [expenses, setExpenses] = useState<ExpenseResponse[]>([]);
   const [categories, setCategories] = useState<ExpenseCategoryResponse[]>([]);
-  const [categoryName, setCategoryName] = useState("");
   const [draft, setDraft] = useState<FinanceDraft>({
     detail: "",
     amount: "0",
@@ -185,20 +185,37 @@ export function FinanceDashboard() {
     async function loadFinance() {
       setIsLoading(true);
       try {
-        const [nextRange, nextCategories, nextBreakdown] = await withRefreshedToken<
-          [RangeFinanceResponse, ExpenseCategoryResponse[], CategoryBreakdownResponse]
-        >(sessionAccessToken, refresh, (currentAccessToken) =>
-          Promise.all([
+        const [nextRange, nextBreakdown, nextCategories, serviceNames] = await withRefreshedToken<
+          [RangeFinanceResponse, CategoryBreakdownResponse, ExpenseCategoryResponse[], string[]]
+        >(sessionAccessToken, refresh, async (currentAccessToken) => {
+          const [rangeResult, breakdownResult, expenseCatsResult] = await Promise.all([
             getAdminRangeFinanceSummary(currentAccessToken, from, to),
-            getAdminExpenseCategories(currentAccessToken),
             getAdminCategoryBreakdown(currentAccessToken, from, to),
-          ]),
-        );
+            getAdminExpenseCategories(currentAccessToken),
+          ]);
+          const svcNames = await getAdminServiceCategoryNames(currentAccessToken);
+          return [rangeResult, breakdownResult, expenseCatsResult, svcNames] as const;
+        });
         if (!isMounted) return;
+
+        let syncedCategories = nextCategories;
+        for (const name of serviceNames) {
+          if (!syncedCategories.some((c) => c.name === name)) {
+            try {
+              const created = await withRefreshedToken(sessionAccessToken, refresh, (token) =>
+                createAdminExpenseCategory(token, { name, isActive: true }),
+              );
+              syncedCategories = [...syncedCategories, created];
+            } catch {
+              // Ignore duplicates
+            }
+          }
+        }
+
         setRangeData(nextRange);
-        setExpenses(nextRange.expenses);
-        setCategories(nextCategories);
         setBreakdown(nextBreakdown);
+        setExpenses(nextRange.expenses);
+        setCategories(syncedCategories.sort((a, b) => a.name.localeCompare(b.name)));
       } catch {
         if (!isMounted) return;
         toast.error("No se pudieron cargar las finanzas.");
@@ -210,28 +227,6 @@ export function FinanceDashboard() {
     void loadFinance();
     return () => { isMounted = false; };
   }, [accessToken, from, to, refresh, status]);
-
-  async function handleCreateCategory() {
-    if (!accessToken || !categoryName.trim()) return;
-    setIsSubmitting(true);
-
-    try {
-      const sessionAccessToken = accessToken;
-      const createdCategory = await withRefreshedToken(sessionAccessToken, refresh, (currentAccessToken) =>
-        createAdminExpenseCategory(currentAccessToken, { name: categoryName.trim(), isActive: true }),
-      );
-      setCategories((current) =>
-        [...current, createdCategory].sort((left, right) => left.name.localeCompare(right.name)),
-      );
-      setDraft((current) => ({ ...current, expenseCategoryId: createdCategory.id }));
-      setCategoryName("");
-      toast.success(`Categoria creada: ${createdCategory.name}.`);
-    } catch {
-      toast.error("No se pudo crear la categoria.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
 
   async function handleCreateExpense() {
     if (!accessToken) return;
@@ -561,53 +556,6 @@ export function FinanceDashboard() {
             </article>
           ) : null}
 
-          {incomeBreakdownData.length > 0 || expenseBreakdownData.length > 0 ? (
-            <article className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-4 sm:rounded-[2rem] sm:p-5">
-              <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-subtle)] sm:text-sm">
-                <Receipt className="h-4 w-4" />
-                Desglose por categoria
-              </p>
-              {incomeBreakdownData.length > 0 ? (
-                <div className="mt-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)] mb-2">Ingresos</p>
-                  <div className="h-48">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={incomeBreakdownData} layout="vertical" margin={{ left: 80, right: 20, top: 5, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                        <XAxis type="number" tick={{ fontSize: 10, fill: "var(--text-subtle)" }} tickLine={false} axisLine={false} />
-                        <YAxis dataKey="category" type="category" tick={{ fontSize: 10, fill: "var(--text)" }} tickLine={false} axisLine={false} width={75} />
-                        <Tooltip
-                          contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "1rem", fontSize: "12px" }}
-                          formatter={(value) => [`${Number(value ?? 0).toFixed(0)} CUP`, ""]}
-                        />
-                        <Line type="monotone" dataKey="amount" stroke={CHART_COLORS[0]} strokeWidth={2} dot={{ r: 4, fill: CHART_COLORS[0] }} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              ) : null}
-              {expenseBreakdownData.length > 0 ? (
-                <div className={incomeBreakdownData.length > 0 ? "mt-5" : "mt-4"}>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)] mb-2">Gastos</p>
-                  <div className="h-48">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={expenseBreakdownData} layout="vertical" margin={{ left: 80, right: 20, top: 5, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                        <XAxis type="number" tick={{ fontSize: 10, fill: "var(--text-subtle)" }} tickLine={false} axisLine={false} />
-                        <YAxis dataKey="category" type="category" tick={{ fontSize: 10, fill: "var(--text)" }} tickLine={false} axisLine={false} width={75} />
-                        <Tooltip
-                          contentStyle={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "1rem", fontSize: "12px" }}
-                          formatter={(value) => [`${Number(value ?? 0).toFixed(0)} CUP`, ""]}
-                        />
-                        <Line type="monotone" dataKey="amount" stroke={CHART_COLORS[1]} strokeWidth={2} dot={{ r: 4, fill: CHART_COLORS[1] }} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              ) : null}
-            </article>
-          ) : null}
-
           <article className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-4 sm:rounded-[2rem] sm:p-5">
             <div className="flex items-center justify-between gap-3">
               <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-subtle)] sm:text-sm">
@@ -677,29 +625,6 @@ export function FinanceDashboard() {
               Registrar gasto
             </p>
             <div className="mt-4">{expenseFormContent}</div>
-          </article>
-
-          <article className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-4 sm:rounded-[2rem] sm:p-5">
-            <p className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.2em] text-[var(--text-subtle)]">
-              Nueva categoria
-            </p>
-            <div className="mt-4 space-y-4">
-              <input
-                className="h-11 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
-                placeholder="Nombre de la categoria"
-                value={categoryName}
-                onChange={(e) => setCategoryName(e.target.value)}
-              />
-              <button
-                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--secondary-btn)] px-4 text-sm font-semibold text-[var(--text)] transition hover:bg-[var(--secondary-btn-hover)]"
-                type="button"
-                onClick={() => void handleCreateCategory()}
-                disabled={isSubmitting}
-              >
-                <Plus className="h-4 w-4" />
-                Guardar categoria
-              </button>
-            </div>
           </article>
         </section>
       </main>
