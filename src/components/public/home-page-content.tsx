@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { X } from "lucide-react";
 
 import { AdminMobileSheet } from "@/components/admin/admin-mobile-sheet";
 import { GalleryCarousel } from "@/components/public/gallery-carousel";
@@ -399,7 +400,20 @@ export function HomePageContent({ siteData }: Readonly<HomePageContentProps>) {
       </main>
 
       <AdminMobileSheet open={showCarousel} onClose={() => setShowCarousel(false)}>
-        <GalleryCarousel images={carouselImages} startIndex={carouselStartIndex} />
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-[var(--text)]">Galeria</p>
+            <button
+              aria-label="Cerrar galeria"
+              className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--surface-muted)] text-[var(--text-muted)] transition hover:bg-[var(--secondary-btn)]"
+              type="button"
+              onClick={() => setShowCarousel(false)}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <GalleryCarousel images={carouselImages} startIndex={carouselStartIndex} />
+        </div>
       </AdminMobileSheet>
 
       <SiteFooter siteData={siteData} />

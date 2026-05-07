@@ -56,9 +56,9 @@ export function GalleryCarousel({ images, startIndex = 0 }: GalleryCarouselProps
                   priority={index === startIndex}
                 />
               </div>
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-5 pt-16">
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent px-5 pb-5 pt-20">
                 <p className="text-sm font-semibold text-white">{image.title}</p>
-                <p className="mt-1 text-xs text-white/70">{image.alt}</p>
+                <p className="mt-1 text-xs text-white/80">{image.alt}</p>
               </div>
             </div>
           ))}
