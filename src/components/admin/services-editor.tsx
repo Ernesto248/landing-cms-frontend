@@ -20,11 +20,11 @@ import type { ServiceResponse, UpsertServiceRequest } from "@/lib/api/types";
 import { formatDuration, formatPrice } from "@/lib/site-content";
 import { toast } from "@/lib/toast";
 
-const defaultCategoryNames = ["Brows", "Lashes"] as const;
+const defaultCategoryNames = ["Cejas", "Pestañas"] as const;
 
 type ServiceDraft = UpsertServiceRequest;
 
-function emptyDraft(category: string = "Brows"): ServiceDraft {
+function emptyDraft(category: string = "Cejas"): ServiceDraft {
   return {
     category,
     name: "",
@@ -589,7 +589,7 @@ export function ServicesEditor() {
       });
 
       setEditingServiceId(null);
-      setDraft(emptyDraft(categoryNames[0] ?? "Brows"));
+      setDraft(emptyDraft(categoryNames[0] ?? "Cejas"));
       setShowMobileForm(false);
       toast.success(
         editingServiceId
@@ -615,7 +615,7 @@ export function ServicesEditor() {
 
       setServices((current) => current.filter((s) => s.id !== editingServiceId));
       setEditingServiceId(null);
-      setDraft(emptyDraft(categoryNames[0] ?? "Brows"));
+      setDraft(emptyDraft(categoryNames[0] ?? "Cejas"));
       setShowMobileForm(false);
       toast.success("Servicio eliminado.");
     } catch {
@@ -646,7 +646,7 @@ export function ServicesEditor() {
 
   function startNewService() {
     setEditingServiceId(null);
-    setDraft(emptyDraft(categoryNames[0] ?? "Brows"));
+    setDraft(emptyDraft(categoryNames[0] ?? "Cejas"));
 
     if (isMobileViewport) {
       setShowMobileForm(true);
@@ -655,7 +655,7 @@ export function ServicesEditor() {
 
   function cancelEditing() {
     setEditingServiceId(null);
-    setDraft(emptyDraft(categoryNames[0] ?? "Brows"));
+    setDraft(emptyDraft(categoryNames[0] ?? "Cejas"));
     setShowMobileForm(false);
   }
 

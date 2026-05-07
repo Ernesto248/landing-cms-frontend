@@ -414,7 +414,7 @@ export async function getAdminServiceCategoryNames(accessToken: string): Promise
   } catch {
     // Fall through to default
   }
-  return ["Brows", "Lashes"];
+  return ["Cejas", "Pestañas"];
 }
 
 export async function upsertAdminServiceCategoryNames(
