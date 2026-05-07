@@ -1,6 +1,11 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { useMemo, useState } from "react";
 
+import { AdminMobileSheet } from "@/components/admin/admin-mobile-sheet";
+import { GalleryCarousel } from "@/components/public/gallery-carousel";
 import { SiteFooter } from "@/components/public/site-footer";
 import { SiteHeader } from "@/components/public/site-header";
 import { WhatsAppFloat } from "@/components/public/whatsapp-float";
@@ -8,27 +13,60 @@ import type { PublicSiteData } from "@/lib/public-site";
 import { formatDuration, formatPrice } from "@/lib/site-content";
 import { createWhatsAppUrl } from "@/lib/whatsapp";
 
-const galleryToneClasses = {
-  rose: "bg-[var(--danger-bg)] text-[var(--danger)]",
-  sand: "bg-[var(--secondary-btn)] text-[#5b5146]",
-  plum: "bg-[#d9d1e8] text-[#4d356b]",
-  olive: "bg-[#dde3d8] text-[var(--success)]",
-};
-
-const gallerySizeClasses = {
-  short: "min-h-40",
-  medium: "min-h-56",
-  tall: "min-h-72",
-};
-
 type HomePageContentProps = {
   siteData: PublicSiteData;
 };
 
 export function HomePageContent({ siteData }: Readonly<HomePageContentProps>) {
   const { businessHours, businessProfile, content, galleryItems, services, testimonials } = siteData;
-  const featuredGalleryItems = galleryItems.slice(0, 4);
   const displayedTestimonials = testimonials.slice(0, 2);
+
+  const galleryByCategory = useMemo(() => {
+    const grouped: Record<string, typeof galleryItems> = {};
+    for (const item of galleryItems) {
+      if (item.serviceCategory && item.imageUrl) {
+        const cat = item.serviceCategory;
+        if (!grouped[cat]) grouped[cat] = [];
+        grouped[cat].push(item);
+      }
+    }
+    return grouped;
+  }, [galleryItems]);
+
+  const galleryCategories = useMemo(() => Object.keys(galleryByCategory), [galleryByCategory]);
+  const [activeGalleryCategory, setActiveGalleryCategory] = useState<string | null>(
+    () => galleryCategories[0] ?? null,
+  );
+  const [carouselImages, setCarouselImages] = useState<{ url: string; alt: string; title: string }[]>([]);
+  const [carouselStartIndex, setCarouselStartIndex] = useState(0);
+  const [showCarousel, setShowCarousel] = useState(false);
+
+  const galleryByService = useMemo(() => {
+    if (!activeGalleryCategory) return {};
+    const items = galleryByCategory[activeGalleryCategory] ?? [];
+    const grouped: Record<string, typeof items> = {};
+    for (const item of items) {
+      const key = item.serviceName;
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(item);
+    }
+    return grouped;
+  }, [activeGalleryCategory, galleryByCategory]);
+
+  const uniqueServiceNames = useMemo(() => Object.keys(galleryByService), [galleryByService]);
+
+  function openCarousel(serviceName: string) {
+    const serviceImages = galleryByService[serviceName] ?? [];
+    setCarouselImages(
+      serviceImages.map((img) => ({
+        url: img.imageUrl!,
+        alt: img.serviceName,
+        title: img.title,
+      })),
+    );
+    setCarouselStartIndex(0);
+    setShowCarousel(true);
+  }
 
   const servicesByCategory = services.reduce<Record<string, typeof services>>((acc, service) => {
     const category = service.category || "Servicios";
@@ -133,34 +171,72 @@ export function HomePageContent({ siteData }: Readonly<HomePageContentProps>) {
             <p className="max-w-2xl text-[1.02rem] leading-8 text-[var(--text-muted)]">{content.galleryIntro}</p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            {featuredGalleryItems.map((item) => (
-              <Link
-                key={item.id}
-                href={`/galeria/${item.id}`}
-                className={`group relative flex overflow-hidden ${gallerySizeClasses[item.size]} rounded-[1.5rem] p-4 transition hover:scale-[1.01] ${galleryToneClasses[item.tone]}`}
-              >
-                {item.imageUrl ? (
-                  <>
-                    <Image
-                      src={item.imageUrl}
-                      alt={item.title}
-                      fill
-                      className="object-cover transition duration-300 group-hover:scale-[1.03]"
-                      sizes="(max-width: 640px) 50vw, 25vw"
-                    />
-                    <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(21,17,22,0.08),rgba(21,17,22,0.72))]" />
-                  </>
-                ) : null}
-                <div className="relative z-10 mt-auto space-y-2 text-white">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-70">
-                    {item.serviceName}
-                  </p>
-                  <p className="text-base font-semibold tracking-[-0.03em] sm:text-lg">{item.title}</p>
+          {galleryCategories.length > 0 ? (
+            <>
+              <div className="flex flex-wrap gap-2">
+                {galleryCategories.map((cat) => (
+                  <button
+                    key={cat}
+                    className={`inline-flex h-9 items-center justify-center rounded-2xl px-4 text-xs font-semibold transition sm:text-sm ${
+                      activeGalleryCategory === cat
+                        ? "bg-[var(--accent)] text-white"
+                        : "bg-[var(--surface-muted)] text-[var(--text-muted)] hover:text-[var(--text)]"
+                    }`}
+                    type="button"
+                    onClick={() => setActiveGalleryCategory(cat)}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+
+              {uniqueServiceNames.length > 0 ? (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                  {uniqueServiceNames.map((serviceName) => {
+                    const coverImage = galleryByService[serviceName]?.[0];
+                    if (!coverImage?.imageUrl) return null;
+
+                    return (
+                      <button
+                        key={serviceName}
+                        className="group relative flex aspect-[4/5] overflow-hidden rounded-[1.5rem] transition hover:scale-[1.02]"
+                        type="button"
+                        onClick={() => openCarousel(serviceName)}
+                      >
+                        <Image
+                          src={coverImage.imageUrl}
+                          alt={serviceName}
+                          fill
+                          className="object-cover transition duration-500 group-hover:scale-105"
+                          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+                        <div className="absolute inset-x-0 bottom-0 p-3">
+                          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/80">
+                            {coverImage.serviceCategory}
+                          </p>
+                          <p className="mt-1 text-sm font-semibold text-white leading-tight">
+                            {serviceName}
+                          </p>
+                          <p className="mt-1 text-[11px] text-white/60">
+                            {galleryByService[serviceName].length} foto{galleryByService[serviceName].length !== 1 ? "s" : ""}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
-              </Link>
-            ))}
-          </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center gap-2 rounded-[2rem] bg-[var(--surface-muted)] py-16 text-center">
+                  <p className="text-sm text-[var(--text-muted)]">Sube imagenes desde el panel CMS para esta categoria.</p>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center gap-2 rounded-[2rem] bg-[var(--surface-muted)] py-16 text-center">
+              <p className="text-sm text-[var(--text-muted)]">Sube imagenes desde el panel CMS para ver la galeria.</p>
+            </div>
+          )}
         </section>
 
         <section id="servicios" className="space-y-5">
@@ -321,6 +397,10 @@ export function HomePageContent({ siteData }: Readonly<HomePageContentProps>) {
           </div>
         </section>
       </main>
+
+      <AdminMobileSheet open={showCarousel} onClose={() => setShowCarousel(false)}>
+        <GalleryCarousel images={carouselImages} startIndex={carouselStartIndex} />
+      </AdminMobileSheet>
 
       <SiteFooter siteData={siteData} />
       <WhatsAppFloat

@@ -10,6 +10,7 @@ import {
   getAdminBusinessProfile,
   getAdminGallery,
   getAdminLandingContent,
+  getAdminServices,
   getAdminTestimonials,
   updateAdminBusinessProfile,
   updateAdminGalleryItem,
@@ -23,6 +24,7 @@ import type {
   BusinessProfileResponse,
   GalleryItemResponse,
   LandingContentResponse,
+  ServiceResponse,
   TestimonialResponse,
 } from "@/lib/api/types";
 import { defaultCmsContent, type CmsContent } from "@/lib/cms-content";
@@ -53,6 +55,7 @@ type EditableGalleryItem = {
   id: string;
   title: string;
   serviceName: string;
+  serviceId: string | null;
   description: string;
   publicUrl: string | null;
   sortOrder: number;
@@ -154,10 +157,11 @@ function mapEditorState(
           : fallbackTestimonials,
       galleryItems: gallery.length
         ? mapGalleryContentItems(
-            gallery.map((item, index) => ({
+            gallery.map((item) => ({
               id: item.id,
-              title: item.caption ?? `Trabajo ${index + 1}`,
-              serviceName: item.altText ?? "Galeria",
+              title: item.caption ?? "Sin titulo",
+              serviceName: item.serviceName ?? item.altText ?? "Galeria",
+              serviceId: item.serviceId,
               description: item.altText ?? item.caption ?? "Resultado reciente",
               publicUrl: item.publicUrl,
               sortOrder: item.sortOrder,
@@ -185,10 +189,11 @@ function mapEditorState(
           sortOrder: index,
         })),
     galleryItems: gallery.length
-      ? gallery.map((item, index) => ({
+      ? gallery.map((item) => ({
           id: item.id,
-          title: item.caption ?? `Trabajo ${index + 1}`,
-          serviceName: item.altText ?? "Galeria",
+          title: item.caption ?? "Sin titulo",
+          serviceName: item.serviceName ?? item.altText ?? "Galeria",
+          serviceId: item.serviceId,
           description: item.altText ?? item.caption ?? "Resultado reciente",
           publicUrl: item.publicUrl,
           sortOrder: item.sortOrder,
@@ -205,6 +210,8 @@ export function ContentEditor() {
   const [errorMessage, setErrorMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
+  const [services, setServices] = useState<ServiceResponse[]>([]);
+  const [pendingGalleryServiceId, setPendingGalleryServiceId] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const heroFileInputRef = useRef<HTMLInputElement | null>(null);
   const [editorState, setEditorState] = useState<EditorState>({
@@ -234,16 +241,19 @@ export function ContentEditor() {
       setErrorMessage("");
 
       try {
-        const [businessProfile, landingContent, testimonials, gallery] = await Promise.all([
+        const [businessProfile, landingContent, testimonials, gallery, svc] = await Promise.all([
           getAdminBusinessProfile(sessionAccessToken),
           getAdminLandingContent(sessionAccessToken),
           getAdminTestimonials(sessionAccessToken),
           getAdminGallery(sessionAccessToken),
+          getAdminServices(sessionAccessToken),
         ]);
 
         if (!isMounted) {
           return;
         }
+
+        setServices(svc);
 
         setEditorState(mapEditorState(landingContent, businessProfile, testimonials, gallery));
         setSaveState("idle");
@@ -430,7 +440,9 @@ export function ContentEditor() {
       formData.append("file", file);
       formData.append("sortOrder", String(index));
       formData.append("altText", editorState.galleryItems[index]?.serviceName ?? "Galeria");
-      formData.append("caption", editorState.galleryItems[index]?.title ?? `Trabajo ${index + 1}`);
+      formData.append("caption", editorState.galleryItems[index]?.title ?? "Sin titulo");
+      const sid = editorState.galleryItems[index]?.serviceId ?? pendingGalleryServiceId;
+      if (sid) formData.append("serviceId", sid);
 
       const uploaded = await uploadAdminGalleryImage(sessionAccessToken, formData);
 
@@ -439,8 +451,9 @@ export function ContentEditor() {
         const nextItems = [...current.galleryItems];
         const nextItem = {
           id: uploaded.id,
-          title: uploaded.caption ?? existingItem?.title ?? `Trabajo ${index + 1}`,
-          serviceName: uploaded.altText ?? existingItem?.serviceName ?? "Galeria",
+          title: uploaded.caption ?? existingItem?.title ?? "Sin titulo",
+          serviceName: uploaded.serviceName ?? existingItem?.serviceName ?? "Galeria",
+          serviceId: uploaded.serviceId ?? existingItem?.serviceId ?? (sid || null),
           description:
             existingItem?.description ?? uploaded.altText ?? uploaded.caption ?? "Resultado reciente",
           publicUrl: uploaded.publicUrl,
@@ -583,6 +596,7 @@ export function ContentEditor() {
               caption: normalizeNullable(item.title),
               sortOrder: item.sortOrder,
               isActive: item.isActive,
+              serviceId: item.serviceId,
             }),
           ),
         );
@@ -860,14 +874,28 @@ export function ContentEditor() {
                                 : "Aun no hay imagenes en la galeria publica."}
                             </p>
                           </div>
-                          <button
-                            className="inline-flex h-10 items-center justify-center rounded-2xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-hover)] disabled:cursor-wait disabled:opacity-70"
-                            type="button"
-                            onClick={() => openGalleryPicker(null)}
-                            disabled={uploadingIndex !== null}
-                          >
-                            {uploadingIndex === editorState.galleryItems.length ? "Subiendo..." : "Agregar imagen"}
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <select
+                              className="h-10 rounded-xl border border-[var(--border-input)] bg-[var(--surface)] px-3 text-sm"
+                              value={pendingGalleryServiceId}
+                              onChange={(e) => setPendingGalleryServiceId(e.target.value)}
+                            >
+                              <option value="">Servicio...</option>
+                              {services.map((s) => (
+                                <option key={s.id} value={s.id}>
+                                  {s.category} - {s.name}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              className="inline-flex h-10 shrink-0 items-center justify-center rounded-2xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                              type="button"
+                              onClick={() => openGalleryPicker(null)}
+                              disabled={uploadingIndex !== null || !pendingGalleryServiceId}
+                            >
+                              {uploadingIndex === editorState.galleryItems.length ? "Subiendo..." : "Agregar imagen"}
+                            </button>
+                          </div>
                         </div>
                       </div>
 
@@ -956,11 +984,29 @@ export function ContentEditor() {
                                   </label>
                                   <label className="mt-3 block text-sm font-medium text-[var(--text)]">
                                     Servicio relacionado
-                                    <input
-                                      className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4"
-                                      value={item.serviceName}
-                                      onChange={(event) => updateGalleryItem(index, "serviceName", event.target.value)}
-                                    />
+                                    <select
+                                      className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
+                                      value={item.serviceId ?? ""}
+                                      onChange={(event) => {
+                                        const sid = event.target.value || null;
+                                        const svc = services.find((s) => s.id === sid);
+                                        setEditorState((current) => ({
+                                          ...current,
+                                          galleryItems: current.galleryItems.map((gi, i) =>
+                                            i === index
+                                              ? { ...gi, serviceId: sid, serviceName: svc?.name ?? "" }
+                                              : gi,
+                                          ),
+                                        }));
+                                      }}
+                                    >
+                                      <option value="">Seleccionar servicio</option>
+                                      {services.map((s) => (
+                                        <option key={s.id} value={s.id}>
+                                          {s.category} - {s.name}
+                                        </option>
+                                      ))}
+                                    </select>
                                   </label>
                                   <label className="mt-3 block text-sm font-medium text-[var(--text)]">
                                     Descripcion

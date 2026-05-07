@@ -86,6 +86,9 @@ export type GalleryItemResponse = {
   caption: string | null;
   sortOrder: number;
   isActive: boolean;
+  serviceId: string | null;
+  serviceName: string | null;
+  serviceCategory: string | null;
   createdAt: string;
 };
 

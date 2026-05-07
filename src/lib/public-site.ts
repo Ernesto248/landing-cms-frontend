@@ -30,6 +30,8 @@ export type PublicGalleryItem = {
   id: string;
   title: string;
   serviceName: string;
+  serviceId: string | null;
+  serviceCategory: string | null;
   description: string;
   tone: GalleryTone;
   size: GallerySize;
@@ -243,7 +245,9 @@ function mapGalleryItem(record: GalleryItemResponse, index: number): PublicGalle
   return {
     id: record.id,
     title: record.caption?.trim() || `Trabajo reciente ${index + 1}`,
-    serviceName: record.altText?.trim() || "Galeria",
+    serviceName: record.serviceName || record.altText?.trim() || "Galeria",
+    serviceId: record.serviceId,
+    serviceCategory: record.serviceCategory,
     description:
       record.altText?.trim() ||
       record.caption?.trim() ||
@@ -260,6 +264,8 @@ function mapGallery(gallery: GalleryItemResponse[] | null): PublicGalleryItem[] 
       id: `mock-${item.slug}`,
       title: item.title,
       serviceName: item.serviceName,
+      serviceId: null,
+      serviceCategory: null,
       description: item.description,
       tone: item.tone,
       size: item.size,

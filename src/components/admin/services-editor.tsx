@@ -7,7 +7,9 @@ import { AdminMobileSheet } from "@/components/admin/admin-mobile-sheet";
 import { useAdminSession } from "@/components/admin/admin-session-provider";
 import {
   createAdminService,
+  deleteAdminExpenseCategory,
   deleteAdminService,
+  getAdminExpenseCategories,
   getAdminServiceCategoryNames,
   getAdminServices,
   updateAdminService,
@@ -522,6 +524,20 @@ export function ServicesEditor() {
 
     if (draft.category === categoryToRemove && nextCategories.length > 0) {
       setDraft((current) => ({ ...current, category: nextCategories[0] }));
+    }
+
+    try {
+      const expenseCats = await withRefreshedToken(accessToken, refresh, (token) =>
+        getAdminExpenseCategories(token),
+      );
+      const matching = expenseCats.find((c) => c.name === categoryToRemove);
+      if (matching) {
+        await withRefreshedToken(accessToken, refresh, (token) =>
+          deleteAdminExpenseCategory(token, matching.id),
+        );
+      }
+    } catch {
+      // best-effort cascade
     }
   }
 

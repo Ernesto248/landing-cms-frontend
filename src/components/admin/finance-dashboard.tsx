@@ -5,6 +5,7 @@ import {
   Loader2,
   Plus,
   Receipt,
+  Trash2,
   TrendingDown,
   TrendingUp,
   X,
@@ -17,6 +18,7 @@ import { useAdminSession } from "@/components/admin/admin-session-provider";
 import {
   createAdminExpense,
   createAdminExpenseCategory,
+  deleteAdminExpense,
   getAdminCategoryBreakdown,
   getAdminExpenseCategories,
   getAdminRangeFinanceSummary,
@@ -274,6 +276,20 @@ export function FinanceDashboard() {
     });
     if (isMobileViewport) {
       setShowMobileExpenseForm(true);
+    }
+  }
+
+  async function handleDeleteExpense(expenseId: string) {
+    if (!accessToken) return;
+    const sessionAccessToken = accessToken;
+    try {
+      await withRefreshedToken(sessionAccessToken, refresh, (currentAccessToken) =>
+        deleteAdminExpense(currentAccessToken, expenseId),
+      );
+      setExpenses((current) => current.filter((e) => e.id !== expenseId));
+      toast.success("Gasto eliminado.");
+    } catch {
+      toast.error("No se pudo eliminar el gasto.");
     }
   }
 
@@ -592,9 +608,19 @@ export function FinanceDashboard() {
                             <p className="mt-1 text-xs text-[var(--text-subtle)] break-words">{expense.notes}</p>
                           ) : null}
                         </div>
-                        <p className="shrink-0 rounded-full bg-[var(--surface)] px-3 py-1 text-xs font-semibold text-[var(--accent)] sm:text-sm">
-                          -{formatCurrency(expense.amount)}
-                        </p>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <p className="shrink-0 rounded-full bg-[var(--surface)] px-3 py-1 text-xs font-semibold text-[var(--accent)] sm:text-sm">
+                            -{formatCurrency(expense.amount)}
+                          </p>
+                          <button
+                            className="flex h-7 w-7 items-center justify-center rounded-lg text-[var(--text-muted)] transition hover:bg-[var(--danger-bg)] hover:text-[var(--danger)]"
+                            type="button"
+                            onClick={() => void handleDeleteExpense(expense.id)}
+                            aria-label="Eliminar gasto"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </article>
                   ))}

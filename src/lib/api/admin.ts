@@ -67,6 +67,7 @@ type UpdateGalleryItemRequest = {
   caption: string | null;
   sortOrder: number;
   isActive: boolean;
+  serviceId: string | null;
 };
 
 function adminFetch<T>(path: string, { accessToken, headers, ...init }: AdminRequestOptions) {
@@ -380,6 +381,20 @@ export function updateAdminService(accessToken: string, serviceId: string, body:
 
 export function deleteAdminService(accessToken: string, serviceId: string) {
   return adminFetch<null>(`/admin/services/${serviceId}`, {
+    accessToken,
+    method: "DELETE",
+  });
+}
+
+export function deleteAdminExpense(accessToken: string, expenseId: string) {
+  return adminFetch<null>(`/admin/expenses/${expenseId}`, {
+    accessToken,
+    method: "DELETE",
+  });
+}
+
+export function deleteAdminExpenseCategory(accessToken: string, categoryId: string) {
+  return adminFetch<null>(`/admin/expense-categories/${categoryId}`, {
     accessToken,
     method: "DELETE",
   });
