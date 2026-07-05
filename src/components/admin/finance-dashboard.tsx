@@ -3,6 +3,7 @@
 import {
   Calendar,
   Loader2,
+  Pencil,
   Plus,
   Receipt,
   Trash2,
@@ -23,6 +24,7 @@ import {
   getAdminExpenseCategories,
   getAdminRangeFinanceSummary,
   getAdminServiceCategoryNames,
+  updateAdminExpense,
 } from "@/lib/api/admin";
 import { ApiError } from "@/lib/api/http";
 import { getHavanaIsoDate } from "@/lib/havana-time";
@@ -137,6 +139,7 @@ export function FinanceDashboard() {
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [showMobileExpenseForm, setShowMobileExpenseForm] = useState(false);
   const [expensesExpanded, setExpensesExpanded] = useState(false);
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
 
   const { from, to } = getFilterRange(activeFilter, customFrom, customTo);
   const activeCategories = useMemo(
@@ -230,49 +233,80 @@ export function FinanceDashboard() {
     return () => { isMounted = false; };
   }, [accessToken, from, to, refresh, status]);
 
-  async function handleCreateExpense() {
+  function resetExpenseDraft(nextCategoryId = draft.expenseCategoryId) {
+    setEditingExpenseId(null);
+    setDraft({
+      detail: "",
+      amount: "0",
+      expenseDate: from,
+      expenseCategoryId: nextCategoryId,
+      notes: "",
+    });
+  }
+
+  async function refreshFinancePeriod(sessionAccessToken: string) {
+    const [nextRange, nextBreakdown] = await Promise.all([
+      getAdminRangeFinanceSummary(sessionAccessToken, from, to),
+      getAdminCategoryBreakdown(sessionAccessToken, from, to),
+    ]);
+    setExpenses(nextRange.expenses);
+    setRangeData(nextRange);
+    setBreakdown(nextBreakdown);
+    return nextRange;
+  }
+
+  async function handleSaveExpense() {
     if (!accessToken) return;
     setIsSubmitting(true);
 
     try {
       const sessionAccessToken = accessToken;
       const amount = Number(draft.amount || 0);
-      const [createdExpense, nextRange] = await withRefreshedToken(sessionAccessToken, refresh, async (currentAccessToken) => {
-        const expense = await createAdminExpense(currentAccessToken, {
+      const wasEditing = Boolean(editingExpenseId);
+      const savedExpense = await withRefreshedToken(sessionAccessToken, refresh, async (currentAccessToken) => {
+        const payload = {
           expenseCategoryId: draft.expenseCategoryId || null,
           expenseDate: draft.expenseDate,
           description: draft.detail.trim(),
           amount,
           notes: draft.notes.trim() ? draft.notes.trim() : null,
-        });
-        const refreshed = await getAdminRangeFinanceSummary(currentAccessToken, from, to);
-        return [expense, refreshed] as const;
+        };
+
+        const expense = editingExpenseId
+          ? await updateAdminExpense(currentAccessToken, editingExpenseId, payload)
+          : await createAdminExpense(currentAccessToken, payload);
+        await refreshFinancePeriod(currentAccessToken);
+        return expense;
       });
-      setExpenses(nextRange.expenses);
-      setRangeData(nextRange);
-      setDraft({
-        detail: "",
-        amount: "0",
-        expenseDate: from,
-        expenseCategoryId: draft.expenseCategoryId,
-        notes: "",
-      });
+      resetExpenseDraft(draft.expenseCategoryId);
       setShowMobileExpenseForm(false);
-      toast.success(`Gasto registrado por ${formatCurrency(createdExpense.amount)}.`);
+      toast.success(
+        wasEditing
+          ? `Gasto actualizado por ${formatCurrency(savedExpense.amount)}.`
+          : `Gasto registrado por ${formatCurrency(savedExpense.amount)}.`,
+      );
     } catch {
-      toast.error("No se pudo registrar el gasto.");
+      toast.error(editingExpenseId ? "No se pudo actualizar el gasto." : "No se pudo registrar el gasto.");
     } finally {
       setIsSubmitting(false);
     }
   }
 
   function handleOpenNewExpense() {
+    resetExpenseDraft(draft.expenseCategoryId);
+    if (isMobileViewport) {
+      setShowMobileExpenseForm(true);
+    }
+  }
+
+  function handleEditExpense(expense: ExpenseResponse) {
+    setEditingExpenseId(expense.id);
     setDraft({
-      detail: "",
-      amount: "0",
-      expenseDate: from,
-      expenseCategoryId: draft.expenseCategoryId,
-      notes: "",
+      detail: expense.description,
+      amount: String(expense.amount),
+      expenseDate: expense.expenseDate,
+      expenseCategoryId: expense.expenseCategoryId ?? "",
+      notes: expense.notes ?? "",
     });
     if (isMobileViewport) {
       setShowMobileExpenseForm(true);
@@ -283,10 +317,13 @@ export function FinanceDashboard() {
     if (!accessToken) return;
     const sessionAccessToken = accessToken;
     try {
-      await withRefreshedToken(sessionAccessToken, refresh, (currentAccessToken) =>
-        deleteAdminExpense(currentAccessToken, expenseId),
-      );
-      setExpenses((current) => current.filter((e) => e.id !== expenseId));
+      await withRefreshedToken(sessionAccessToken, refresh, async (currentAccessToken) => {
+        await deleteAdminExpense(currentAccessToken, expenseId);
+        await refreshFinancePeriod(currentAccessToken);
+      });
+      if (editingExpenseId === expenseId) {
+        resetExpenseDraft();
+      }
       toast.success("Gasto eliminado.");
     } catch {
       toast.error("No se pudo eliminar el gasto.");
@@ -306,13 +343,18 @@ export function FinanceDashboard() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 lg:hidden">
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
-          Registrar gasto
+          {editingExpenseId ? "Editar gasto" : "Registrar gasto"}
         </p>
         <button
           aria-label="Cerrar formulario"
           className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--surface-muted)] text-[var(--text-muted)] transition hover:bg-[var(--secondary-btn)]"
           type="button"
-          onClick={() => setShowMobileExpenseForm(false)}
+          onClick={() => {
+            setShowMobileExpenseForm(false);
+            if (editingExpenseId) {
+              resetExpenseDraft();
+            }
+          }}
         >
           <X className="h-4 w-4" />
         </button>
@@ -377,7 +419,7 @@ export function FinanceDashboard() {
       <button
         className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-hover)] disabled:bg-[var(--text-subtle)]"
         type="button"
-        onClick={() => void handleCreateExpense()}
+        onClick={() => void handleSaveExpense()}
         disabled={isSubmitting}
       >
         {isSubmitting ? (
@@ -386,9 +428,18 @@ export function FinanceDashboard() {
             Guardando...
           </>
         ) : (
-          "Guardar gasto"
+          editingExpenseId ? "Guardar cambios" : "Guardar gasto"
         )}
       </button>
+      {editingExpenseId ? (
+        <button
+          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-2xl bg-[var(--surface-muted)] px-4 text-sm font-semibold text-[var(--text)] transition hover:bg-[var(--secondary-btn)]"
+          type="button"
+          onClick={() => resetExpenseDraft()}
+        >
+          Cancelar edicion
+        </button>
+      ) : null}
     </div>
   );
 
@@ -397,7 +448,7 @@ export function FinanceDashboard() {
       <main className="min-w-0 grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
         <section className="min-w-0 space-y-4">
           <article className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-4 sm:rounded-[2rem] sm:p-5">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--accent)] sm:text-sm">Finanzas</p>
                 <h2 className="mt-1.5 text-xl font-semibold tracking-[-0.04em] text-[var(--text)] sm:text-2xl">
@@ -613,6 +664,14 @@ export function FinanceDashboard() {
                             -{formatCurrency(expense.amount)}
                           </p>
                           <button
+                            className="flex h-7 w-7 items-center justify-center rounded-lg text-[var(--text-muted)] transition hover:bg-[var(--secondary-btn)] hover:text-[var(--text)]"
+                            type="button"
+                            onClick={() => handleEditExpense(expense)}
+                            aria-label="Editar gasto"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          <button
                             className="flex h-7 w-7 items-center justify-center rounded-lg text-[var(--text-muted)] transition hover:bg-[var(--danger-bg)] hover:text-[var(--danger)]"
                             type="button"
                             onClick={() => void handleDeleteExpense(expense.id)}
@@ -647,8 +706,8 @@ export function FinanceDashboard() {
         <section className="hidden gap-4 lg:grid">
           <article className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-4 sm:rounded-[2rem] sm:p-5">
             <p className="flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
-              <Plus className="h-4 w-4" />
-              Registrar gasto
+              {editingExpenseId ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {editingExpenseId ? "Editar gasto" : "Registrar gasto"}
             </p>
             <div className="mt-4">{expenseFormContent}</div>
           </article>
@@ -657,7 +716,12 @@ export function FinanceDashboard() {
 
       <AdminMobileSheet
         open={showMobileExpenseForm}
-        onClose={() => setShowMobileExpenseForm(false)}
+        onClose={() => {
+          setShowMobileExpenseForm(false);
+          if (editingExpenseId) {
+            resetExpenseDraft();
+          }
+        }}
       >
         {expenseFormContent}
       </AdminMobileSheet>

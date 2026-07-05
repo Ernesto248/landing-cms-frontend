@@ -8,7 +8,7 @@ export function SiteFooter({ siteData }: Readonly<SiteFooterProps>) {
   const { businessProfile, content } = siteData;
 
   return (
-    <footer className="mt-12 bg-[var(--surface-inverse)] px-4 py-8 text-[var(--text-on-dark)]/85 sm:px-6 lg:px-8">
+    <footer className="mt-12 bg-[var(--surface-inverse)] px-4 pb-28 pt-8 text-[var(--text-on-dark)]/85 sm:px-6 md:pb-8 lg:px-8">
       <div className="mx-auto grid w-full max-w-6xl gap-6 text-sm md:grid-cols-3">
         <div className="space-y-3">
           <p className="text-base font-semibold text-white">Jeni&apos;s Lashes & Brows</p>

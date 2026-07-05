@@ -107,6 +107,7 @@ export function AdminHomeDashboard() {
   const [detailAppointment, setDetailAppointment] = useState<PlannerAppointment | null>(null);
   const [detailCancelReason, setDetailCancelReason] = useState("");
   const [detailIsSubmitting, setDetailIsSubmitting] = useState(false);
+  const [detailDeleteConfirm, setDetailDeleteConfirm] = useState(false);
 
   const todayIsoDate = useMemo(() => getHavanaIsoDate(), []);
   const monthKey = useMemo(() => getHavanaMonthKey(), []);
@@ -247,12 +248,14 @@ export function AdminHomeDashboard() {
   function openDetail(appointment: PlannerAppointment) {
     setDetailAppointment(appointment);
     setDetailCancelReason(appointment.cancelReason ?? "");
+    setDetailDeleteConfirm(false);
     setErrorMessage("");
   }
 
   function closeDetail() {
     setDetailAppointment(null);
     setDetailCancelReason("");
+    setDetailDeleteConfirm(false);
   }
 
   async function handleDetailStatusToggle() {
@@ -280,10 +283,13 @@ export function AdminHomeDashboard() {
         ]);
         setTodayAppointments(nextToday);
         const updatedRaw = nextToday.find((a) => a.id === detailAppointment.id);
-        if (updatedRaw) {
+        if (updatedRaw && nextStatus !== "COMPLETED") {
           setDetailAppointment(mapToPlannerAppointment(updatedRaw, clientsById.get(updatedRaw.clientId)));
         }
       });
+      if (nextStatus === "COMPLETED") {
+        closeDetail();
+      }
     } catch {
       setErrorMessage("No se pudo actualizar el estado de la cita.");
     } finally {
@@ -308,6 +314,7 @@ export function AdminHomeDashboard() {
       });
       setDetailAppointment(null);
       setDetailCancelReason("");
+      setDetailDeleteConfirm(false);
     } catch {
       setErrorMessage("No se pudo eliminar la cita.");
     } finally {
@@ -351,7 +358,7 @@ export function AdminHomeDashboard() {
 
   function handleDetailEdit() {
     if (!detailAppointment) return;
-    router.push(`/admin/citas?date=${detailAppointment.date}&appointmentId=${detailAppointment.id}`);
+    router.push(`/admin/citas?mode=edit&date=${detailAppointment.date}&appointmentId=${detailAppointment.id}`);
   }
 
   if (status === "loading" || isLoading) {
@@ -393,7 +400,7 @@ export function AdminHomeDashboard() {
               <h2 className="mt-1.5 text-xl font-semibold tracking-[-0.04em] text-[var(--text)] sm:text-2xl">Lo primero es resolver el dia.</h2>
             </div>
             <Link
-              href="/admin/citas"
+              href={`/admin/citas?mode=new&date=${todayIsoDate}`}
               className="inline-flex h-10 items-center gap-2 rounded-2xl bg-[var(--secondary-btn)] px-4 text-xs font-semibold text-[var(--text)] transition hover:bg-[var(--secondary-btn-hover)] sm:h-11 sm:text-sm"
             >
               <Plus className="h-4 w-4" />
@@ -644,17 +651,45 @@ export function AdminHomeDashboard() {
 
     <AdminMobileSheet open={detailAppointment !== null} onClose={closeDetail}>
       {detailAppointment ? (
-        <AppointmentDetailPanel
-          appointment={detailAppointment}
-          cancelReason={detailCancelReason}
-          setCancelReason={setDetailCancelReason}
-          isSubmitting={detailIsSubmitting}
-          onClose={closeDetail}
-          onCompleteToggle={() => void handleDetailStatusToggle()}
-          onEdit={handleDetailEdit}
-          onDelete={() => void handleDetailDelete()}
-          onCancel={() => void handleDetailCancel()}
-        />
+        <div className="space-y-3">
+          <AppointmentDetailPanel
+            appointment={detailAppointment}
+            cancelReason={detailCancelReason}
+            setCancelReason={setDetailCancelReason}
+            isSubmitting={detailIsSubmitting}
+            onClose={closeDetail}
+            onCompleteToggle={() => void handleDetailStatusToggle()}
+            onEdit={handleDetailEdit}
+            onDelete={() => setDetailDeleteConfirm(true)}
+            onCancel={() => void handleDetailCancel()}
+          />
+          {detailDeleteConfirm ? (
+            <div className="rounded-[1.4rem] border border-[var(--danger)]/25 bg-[var(--danger-bg)] p-4 text-[var(--danger)]">
+              <p className="text-sm font-semibold">Eliminar cita</p>
+              <p className="mt-1 text-sm leading-6">
+                Esta accion eliminara la cita de {detailAppointment.client}. No se puede deshacer.
+              </p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <button
+                  className="inline-flex h-10 items-center justify-center rounded-2xl bg-[var(--surface)] px-4 text-sm font-semibold text-[var(--text)] transition hover:bg-[var(--surface-muted)]"
+                  type="button"
+                  onClick={() => setDetailDeleteConfirm(false)}
+                  disabled={detailIsSubmitting}
+                >
+                  No, conservar
+                </button>
+                <button
+                  className="inline-flex h-10 items-center justify-center rounded-2xl bg-[var(--danger)] px-4 text-sm font-semibold text-white transition disabled:opacity-60"
+                  type="button"
+                  onClick={() => void handleDetailDelete()}
+                  disabled={detailIsSubmitting}
+                >
+                  Si, eliminar
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
       ) : null}
     </AdminMobileSheet>
     </>

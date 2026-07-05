@@ -1,4 +1,4 @@
-import { apiFetch, type JsonInit } from "@/lib/api/http";
+import { apiFetch, apiFetchText, type JsonInit } from "@/lib/api/http";
 import type {
   AppointmentResponse,
   BusinessHourResponse,
@@ -281,6 +281,19 @@ export function getAdminCategoryBreakdown(accessToken: string, from: string, to:
   });
 }
 
+export function getAdminFinanceExportCsv(accessToken: string, from: string, to: string) {
+  const query = new URLSearchParams({ from, to }).toString();
+  return apiFetchText(`/admin/finance/export.csv?${query}`, {
+    method: "GET",
+    cache: "no-store",
+    credentials: "include",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "text/csv",
+    },
+  });
+}
+
 export function getAdminExpenseCategories(accessToken: string) {
   return adminFetch<ExpenseCategoryResponse[]>("/admin/expense-categories", {
     accessToken,
@@ -311,6 +324,14 @@ export function createAdminExpense(accessToken: string, body: CreateExpenseReque
   return adminFetch<ExpenseResponse>("/admin/expenses", {
     accessToken,
     method: "POST",
+    body,
+  });
+}
+
+export function updateAdminExpense(accessToken: string, expenseId: string, body: CreateExpenseRequest) {
+  return adminFetch<ExpenseResponse>(`/admin/expenses/${expenseId}`, {
+    accessToken,
+    method: "PUT",
     body,
   });
 }

@@ -244,7 +244,7 @@ function ServiceForm({
             disabled={isDeleting}
           >
             <Trash2 className="h-4 w-4" />
-            {isDeleting ? "Eliminando..." : "Eliminar"}
+            {isDeleting ? "Archivando..." : "Archivar"}
           </button>
         ) : null}
       </div>
@@ -613,13 +613,17 @@ export function ServicesEditor() {
         deleteAdminService(currentAccessToken, editingServiceId),
       );
 
-      setServices((current) => current.filter((s) => s.id !== editingServiceId));
+      setServices((current) =>
+        current.map((service) =>
+          service.id === editingServiceId ? { ...service, isActive: false } : service,
+        ),
+      );
       setEditingServiceId(null);
       setDraft(emptyDraft(categoryNames[0] ?? "Cejas"));
       setShowMobileForm(false);
-      toast.success("Servicio eliminado.");
+      toast.success("Servicio archivado. Puedes reactivarlo desde la lista de inactivos.");
     } catch {
-      toast.error("No se pudo eliminar el servicio.");
+      toast.error("No se pudo archivar el servicio.");
     } finally {
       setIsDeleting(false);
     }

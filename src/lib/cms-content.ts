@@ -33,8 +33,8 @@ export const defaultCmsContent: CmsContent = {
     "Agenda directo por WhatsApp y coordina tu servicio segun modalidad, horario base y resultado que quieras lograr.",
   heroBackgroundUrl: null,
   servicesIntro:
-    "Tarjetas resumidas por categoria con precio visible, duracion clara y descriptores breves.",
-  galleryIntro: "Masonry compacto con detalle visual y CTA directo por cada resultado.",
+    "Precios claros, tiempos visibles y opciones pensadas para que elijas sin vueltas antes de escribir.",
+  galleryIntro: "Explora acabados recientes por tipo de servicio y usa las fotos como referencia para tu cita.",
   testimonials,
   galleryItems,
   whatsappMessage: "Hola, quiero agendar una cita en Jeni's Lashes & Brows.",

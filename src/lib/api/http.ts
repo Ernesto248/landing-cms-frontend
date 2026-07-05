@@ -98,3 +98,20 @@ export async function safeApiFetch<T>(path: string, init: JsonInit = {}) {
     return null;
   }
 }
+
+export async function apiFetchText(path: string, init: JsonInit = {}) {
+  const headers = buildHeaders(init.headers);
+  const response = await fetch(buildApiUrl(path), {
+    method: init.method,
+    headers,
+    cache: init.cache,
+    credentials: init.credentials,
+    signal: init.signal,
+  });
+
+  if (!response.ok) {
+    throw await parseApiError(response);
+  }
+
+  return response.text();
+}

@@ -149,3 +149,77 @@ select {
 [class*="overflow-x-auto"] {
   -webkit-overflow-scrolling: touch;
 }
+
+.appointment-load-card {
+  --appointment-load-level: 0%;
+  --appointment-load-strong: rgba(230, 0, 35, 0.26);
+  --appointment-load-soft: rgba(230, 0, 35, 0.14);
+}
+
+.appointment-load-water {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 0;
+  height: var(--appointment-load-level);
+  min-height: 0;
+  overflow: visible;
+  background: linear-gradient(180deg, var(--appointment-load-strong), var(--appointment-load-soft));
+  opacity: 0;
+  transform: translateY(0.5rem);
+  transition:
+    height 520ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 240ms ease,
+    transform 520ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.appointment-load-card[data-has-load="true"] .appointment-load-water {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.appointment-load-water::before,
+.appointment-load-water::after {
+  content: "";
+  position: absolute;
+  left: -50%;
+  width: 200%;
+  pointer-events: none;
+}
+
+.appointment-load-water::before {
+  top: -0.8rem;
+  height: 1rem;
+  background:
+    radial-gradient(55% 90% at 50% 100%, var(--appointment-load-strong) 48%, transparent 50%)
+    0 0 / 1.35rem 0.8rem repeat-x;
+  animation: appointment-water-wave 2.7s linear infinite;
+}
+
+.appointment-load-water::after {
+  top: -0.55rem;
+  height: 0.75rem;
+  background:
+    radial-gradient(55% 90% at 50% 100%, var(--appointment-load-soft) 48%, transparent 50%)
+    0 0 / 1rem 0.55rem repeat-x;
+  animation: appointment-water-wave 1.9s linear infinite reverse;
+}
+
+@keyframes appointment-water-wave {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(1.35rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .appointment-load-water,
+  .appointment-load-water::before,
+  .appointment-load-water::after {
+    animation: none;
+    transition: none;
+  }
+}

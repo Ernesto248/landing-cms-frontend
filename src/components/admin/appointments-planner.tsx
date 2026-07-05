@@ -2,9 +2,12 @@
 
 import {
   addDays as dfAddDays,
+  addMonths as dfAddMonths,
+  endOfMonth as dfEndOfMonth,
   format as dfFormat,
   getDay,
   parseISO,
+  startOfMonth as dfStartOfMonth,
   startOfWeek as dfStartOfWeek,
 } from "date-fns";
 import {
@@ -21,10 +24,12 @@ import {
   Pencil,
   Plus,
   Scissors,
+  Search,
   Users,
   X,
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
+import type { CSSProperties } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { AdminMobileSheet } from "@/components/admin/admin-mobile-sheet";
@@ -85,6 +90,7 @@ type WeekDay = {
 };
 
 type MobilePanel = "wizard" | "detail" | null;
+type CalendarView = "day" | "week" | "month";
 
 type WizardPanelProps = {
   editingAppointmentId: string | null;
@@ -95,6 +101,8 @@ type WizardPanelProps = {
   onSave: () => void;
   isSubmitting: boolean;
   canSaveAppointment: boolean;
+  canContinueStep: boolean;
+  validationMessage: string;
   clients: ClientResponse[];
   form: AppointmentForm;
   onExistingClientChange: (clientId: string) => void;
@@ -141,6 +149,10 @@ function addDays(isoDate: string, amount: number) {
   return dfFormat(dfAddDays(parseIsoDate(isoDate), amount), "yyyy-MM-dd");
 }
 
+function addMonths(isoDate: string, amount: number) {
+  return dfFormat(dfAddMonths(parseIsoDate(isoDate), amount), "yyyy-MM-dd");
+}
+
 function startOfWeek(isoDate: string) {
   const monday = dfStartOfWeek(parseIsoDate(isoDate), { weekStartsOn: 1 });
   return dfFormat(monday, "yyyy-MM-dd");
@@ -164,6 +176,81 @@ function formatWeekRangeLabel(anchorDate: string) {
   return `${dfFormat(monday, "d")} ${startMonth} - ${dfFormat(sunday, "d")} ${endMonth}`;
 }
 
+function formatMonthLabel(anchorDate: string) {
+  const date = parseIsoDate(anchorDate);
+  return `${monthLabels[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+function formatDisplayDate(isoDate: string) {
+  return dfFormat(parseIsoDate(isoDate), "dd/MM/yyyy");
+}
+
+function normalizeDisplayDateInput(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
+
+function parseDisplayDate(value: string) {
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value.trim());
+  if (!match) return null;
+
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  const parsed = new Date(year, month - 1, day);
+
+  if (
+    parsed.getFullYear() !== year ||
+    parsed.getMonth() !== month - 1 ||
+    parsed.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function normalizeMilitaryTimeInput(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 4);
+  if (digits.length <= 2) return digits;
+  return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+}
+
+function isValidMilitaryTime(value: string) {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+}
+
+function timeToMinutes(time: string) {
+  if (!isValidMilitaryTime(time)) return null;
+  const [hours, minutes] = time.split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+function minutesToTimeLabel(totalMinutes: number) {
+  const minutesInDay = 24 * 60;
+  const normalizedMinutes = ((totalMinutes % minutesInDay) + minutesInDay) % minutesInDay;
+  return `${String(Math.floor(normalizedMinutes / 60)).padStart(2, "0")}:${String(normalizedMinutes % 60).padStart(2, "0")}`;
+}
+
+function getCalendarRange(view: CalendarView, anchorDate: string) {
+  if (view === "day") {
+    return { from: anchorDate, to: anchorDate };
+  }
+
+  if (view === "month") {
+    const date = parseIsoDate(anchorDate);
+    return {
+      from: dfFormat(dfStartOfMonth(date), "yyyy-MM-dd"),
+      to: dfFormat(dfEndOfMonth(date), "yyyy-MM-dd"),
+    };
+  }
+
+  const week = buildWeekDays(anchorDate);
+  return { from: week[0].isoDate, to: week[week.length - 1].isoDate };
+}
+
 function buildWeekDays(anchorDate: string): WeekDay[] {
   const monday = startOfWeek(anchorDate);
 
@@ -179,6 +266,22 @@ function buildWeekDays(anchorDate: string): WeekDay[] {
   });
 }
 
+function buildMonthDays(anchorDate: string): WeekDay[] {
+  const date = parseIsoDate(anchorDate);
+  const firstDay = dfStartOfMonth(date);
+  const lastDay = dfEndOfMonth(date);
+  const dayCount = Number(dfFormat(lastDay, "d"));
+
+  return Array.from({ length: dayCount }, (_, index) => {
+    const current = dfAddDays(firstDay, index);
+    return {
+      label: dayLabels[getDay(current)] ?? "Dia",
+      date: dfFormat(current, "dd"),
+      isoDate: dfFormat(current, "yyyy-MM-dd"),
+    };
+  });
+}
+
 function normalizeNullable(value: string) {
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
@@ -190,8 +293,8 @@ function parseAmount(value: string) {
 }
 
 function getAppointmentEndTimeMinutes(startTime: string, durationMinutes: number) {
-  const [hours, minutes] = startTime.split(":").map(Number);
-  return hours * 60 + minutes + durationMinutes;
+  const startMinutes = timeToMinutes(startTime);
+  return startMinutes === null ? null : startMinutes + durationMinutes;
 }
 
 function hasAppointmentOverlap(
@@ -205,6 +308,7 @@ function hasAppointmentOverlap(
 ) {
   const candidateStart = getAppointmentEndTimeMinutes(candidate.time, 0);
   const candidateEnd = getAppointmentEndTimeMinutes(candidate.time, candidate.durationMinutes);
+  if (candidateStart === null || candidateEnd === null) return undefined;
 
   return appointments.find((appointment) => {
     if (candidate.id && appointment.id === candidate.id) return false;
@@ -212,12 +316,30 @@ function hasAppointmentOverlap(
 
     const appointmentStart = getAppointmentEndTimeMinutes(appointment.time, 0);
     const appointmentEnd = getAppointmentEndTimeMinutes(appointment.time, appointment.durationMinutes);
+    if (appointmentStart === null || appointmentEnd === null) return false;
     return candidateStart < appointmentEnd && candidateEnd > appointmentStart;
   });
 }
 
 function getErrorMessage(error: unknown, fallbackMessage: string) {
-  if (error instanceof ApiError) return error.message;
+  if (error instanceof ApiError) {
+    const message = error.message;
+    const normalizedMessage = message.toLowerCase();
+
+    if (normalizedMessage.includes("outside business hours")) {
+      return "La cita esta fuera del horario laboral configurado. Ajusta la fecha u hora en el paso Horario.";
+    }
+
+    if (normalizedMessage.includes("overlaps with a schedule block")) {
+      return "La cita cruza con un bloqueo de horario. Ajusta la fecha u hora en el paso Horario.";
+    }
+
+    if (normalizedMessage.includes("overlap")) {
+      return "La cita se cruza con otra cita existente. Ajusta la fecha u hora en el paso Horario.";
+    }
+
+    return message;
+  }
   return fallbackMessage;
 }
 
@@ -313,6 +435,8 @@ function AppointmentWizardPanel({
   onSave,
   isSubmitting,
   canSaveAppointment,
+  canContinueStep,
+  validationMessage,
   clients,
   form,
   onExistingClientChange,
@@ -330,6 +454,36 @@ function AppointmentWizardPanel({
   onStepClick,
   furthestStepReached,
 }: WizardPanelProps) {
+  const [clientSearch, setClientSearch] = useState("");
+  const [dateInput, setDateInput] = useState(() => ({
+    formDate: form.date,
+    value: formatDisplayDate(form.date),
+  }));
+  const nativeDateInputRef = useRef<HTMLInputElement>(null);
+  const nativeTimeInputRef = useRef<HTMLInputElement>(null);
+  const selectedClient = clients.find((client) => client.id === form.existingClientId);
+  const filteredClients = useMemo(() => {
+    const query = clientSearch.trim().toLowerCase();
+    if (!query) return clients.slice(0, 8);
+
+    return clients
+      .filter((client) => {
+        const phone = client.whatsapp ?? client.phone ?? "";
+        return `${client.fullName} ${phone}`.toLowerCase().includes(query);
+      })
+      .slice(0, 8);
+  }, [clientSearch, clients]);
+  const dateInputValue = dateInput.formDate === form.date ? dateInput.value : formatDisplayDate(form.date);
+  const openNativePicker = (input: HTMLInputElement | null) => {
+    if (!input) return;
+    if (typeof input.showPicker === "function") {
+      input.showPicker();
+      return;
+    }
+    input.focus();
+    input.click();
+  };
+
   return (
     <article className="flex flex-col overflow-hidden rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] max-h-[calc(100vh-8rem)] sm:rounded-[2rem]">
       <div className="shrink-0 p-4 pb-0 sm:p-5 sm:pb-0">
@@ -389,21 +543,69 @@ function AppointmentWizardPanel({
       <div className="min-h-0 flex-1 overflow-y-auto p-4 pt-5 sm:p-5 sm:pt-5">
         {currentStep === 0 ? (
           <div className="space-y-4">
-            <label className="block text-sm font-medium text-[var(--text)]">
+            <div className="block text-sm font-medium text-[var(--text)]">
               Clienta existente
-              <select
-                className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
-                value={form.existingClientId}
-                onChange={(event) => onExistingClientChange(event.target.value)}
-              >
-                <option value="">Registrar clienta nueva</option>
-                {clients.map((client) => (
-                  <option key={client.id} value={client.id}>
-                    {client.fullName}
-                  </option>
-                ))}
-              </select>
-            </label>
+              <div className="mt-2 rounded-[1.4rem] border border-[var(--border-input)] bg-[var(--surface)] p-2">
+                <label className="flex h-10 items-center gap-2 rounded-2xl bg-[var(--surface-muted)] px-3">
+                  <Search className="h-4 w-4 shrink-0 text-[var(--text-subtle)]" />
+                  <input
+                    className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[var(--text-subtle)]"
+                    value={clientSearch || selectedClient?.fullName || ""}
+                    onChange={(event) => {
+                      setClientSearch(event.target.value);
+                      if (form.existingClientId) {
+                        onExistingClientChange("");
+                      }
+                    }}
+                    placeholder="Buscar por nombre o telefono"
+                  />
+                </label>
+
+                <div className="mt-2 max-h-44 space-y-1 overflow-y-auto pr-1">
+                  <button
+                    className={`flex w-full items-center justify-between rounded-2xl px-3 py-2.5 text-left text-sm transition ${
+                      !form.existingClientId
+                        ? "bg-[var(--accent)] font-semibold text-white"
+                        : "text-[var(--text)] hover:bg-[var(--surface-muted)]"
+                    }`}
+                    type="button"
+                    onClick={() => {
+                      setClientSearch("");
+                      onExistingClientChange("");
+                    }}
+                  >
+                    Registrar clienta nueva
+                  </button>
+                  {filteredClients.map((client) => {
+                    const selected = client.id === form.existingClientId;
+                    const phone = client.whatsapp ?? client.phone;
+                    return (
+                      <button
+                        key={client.id}
+                        className={`block w-full rounded-2xl px-3 py-2.5 text-left transition ${
+                          selected
+                            ? "bg-[var(--danger-bg)] text-[var(--accent)]"
+                            : "text-[var(--text)] hover:bg-[var(--surface-muted)]"
+                        }`}
+                        type="button"
+                        onClick={() => {
+                          setClientSearch("");
+                          onExistingClientChange(client.id);
+                        }}
+                      >
+                        <span className="block truncate text-sm font-semibold">{client.fullName}</span>
+                        {phone ? (
+                          <span className="mt-0.5 block truncate text-xs text-[var(--text-muted)]">{phone}</span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                  {filteredClients.length === 0 ? (
+                    <p className="px-3 py-2 text-xs text-[var(--text-muted)]">No encontramos clientas con esa busqueda.</p>
+                  ) : null}
+                </div>
+              </div>
+            </div>
             <label className="block text-sm font-medium text-[var(--text)]">
               Nombre
               <input
@@ -496,21 +698,93 @@ function AppointmentWizardPanel({
           <div className="space-y-4">
             <label className="block text-sm font-medium text-[var(--text)]">
               Fecha
-              <input
-                className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
-                type="date"
-                value={form.date}
-                onChange={(event) => onFormChange((current) => ({ ...current, date: event.target.value }))}
-              />
+              <div className="mt-2 flex h-12 overflow-hidden rounded-2xl border border-[var(--border-input)] bg-[var(--surface)]">
+                <input
+                  className="min-w-0 flex-1 bg-transparent px-4 text-sm outline-none"
+                  inputMode="numeric"
+                  maxLength={10}
+                  placeholder="DD/MM/YYYY"
+                  value={dateInputValue}
+                  onBlur={() => {
+                    const nextDate = parseDisplayDate(dateInputValue);
+                    const fallbackDate = nextDate ?? form.date;
+                    setDateInput({ formDate: fallbackDate, value: formatDisplayDate(fallbackDate) });
+                  }}
+                  onChange={(event) => {
+                    const nextValue = normalizeDisplayDateInput(event.target.value);
+                    const nextDate = parseDisplayDate(nextValue);
+                    setDateInput({ formDate: nextDate ?? form.date, value: nextValue });
+                    if (nextDate) {
+                      onFormChange((current) => ({ ...current, date: nextDate }));
+                    }
+                  }}
+                />
+                <button
+                  aria-label="Abrir calendario"
+                  className="flex w-12 shrink-0 items-center justify-center border-l border-[var(--secondary-btn)] text-[var(--text-muted)] transition hover:bg-[var(--surface-muted)] hover:text-[var(--accent)]"
+                  type="button"
+                  onClick={() => openNativePicker(nativeDateInputRef.current)}
+                >
+                  <CalendarDays className="h-4 w-4" />
+                </button>
+                <input
+                  ref={nativeDateInputRef}
+                  aria-hidden="true"
+                  className="sr-only"
+                  tabIndex={-1}
+                  type="date"
+                  value={form.date}
+                  onChange={(event) => {
+                    if (!event.target.value) return;
+                    setDateInput({ formDate: event.target.value, value: formatDisplayDate(event.target.value) });
+                    onFormChange((current) => ({ ...current, date: event.target.value }));
+                  }}
+                />
+              </div>
+              <span className="mt-1 block text-xs font-medium text-[var(--text-muted)]">Formato DD/MM/YYYY</span>
             </label>
             <label className="block text-sm font-medium text-[var(--text)]">
               Hora de inicio
-              <input
-                className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
-                type="time"
-                value={form.time}
-                onChange={(event) => onFormChange((current) => ({ ...current, time: event.target.value }))}
-              />
+              <div className="mt-2 flex h-12 overflow-hidden rounded-2xl border border-[var(--border-input)] bg-[var(--surface)]">
+                <input
+                  className="min-w-0 flex-1 bg-transparent px-4 text-sm outline-none"
+                  inputMode="numeric"
+                  maxLength={5}
+                  placeholder="14:30"
+                  value={form.time}
+                  onChange={(event) => {
+                    const nextTime = normalizeMilitaryTimeInput(event.target.value);
+                    onFormChange((current) => ({ ...current, time: nextTime }));
+                  }}
+                />
+                <button
+                  aria-label="Abrir selector de hora"
+                  className="flex w-12 shrink-0 items-center justify-center border-l border-[var(--secondary-btn)] text-[var(--text-muted)] transition hover:bg-[var(--surface-muted)] hover:text-[var(--accent)]"
+                  type="button"
+                  onClick={() => openNativePicker(nativeTimeInputRef.current)}
+                >
+                  <Clock className="h-4 w-4" />
+                </button>
+                <input
+                  ref={nativeTimeInputRef}
+                  aria-hidden="true"
+                  className="sr-only"
+                  tabIndex={-1}
+                  type="time"
+                  value={isValidMilitaryTime(form.time) ? form.time : ""}
+                  onChange={(event) => {
+                    if (!event.target.value) return;
+                    onFormChange((current) => ({ ...current, time: event.target.value }));
+                  }}
+                />
+              </div>
+              <span
+                className={`mt-1 block text-xs font-medium ${
+                  form.time && !isValidMilitaryTime(form.time) ? "text-[var(--danger)]" : "text-[var(--text-muted)]"
+                }`}
+              >
+                Formato 24 horas, ej. 09:30 o 14:30.
+              </span>
             </label>
             <div className="rounded-[1.2rem] bg-[var(--surface-muted)] p-4">
               <div className="flex items-center gap-3 text-sm">
@@ -615,7 +889,7 @@ function AppointmentWizardPanel({
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-[var(--text-subtle)]" />
                 <span className="text-[var(--text)]">
-                  {form.date} · {form.time} - {endTimeLabel} · {formatDuration(durationTotal)}
+                  {formatDisplayDate(form.date)} · {form.time} - {endTimeLabel} · {formatDuration(durationTotal)}
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -646,6 +920,12 @@ function AppointmentWizardPanel({
       </div>
 
       <div className="shrink-0 border-t border-[var(--secondary-btn)] p-4 sm:p-5">
+        {validationMessage ? (
+          <div className="mb-3 flex items-start gap-2 rounded-[1rem] bg-[var(--danger-bg)] px-3 py-2.5 text-xs font-medium text-[var(--danger)]">
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>{validationMessage}</span>
+          </div>
+        ) : null}
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
         <button
           className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[var(--secondary-btn)] px-4 text-sm font-semibold text-[var(--text)] transition hover:bg-[var(--secondary-btn-hover)] disabled:opacity-30 sm:h-11"
@@ -658,7 +938,10 @@ function AppointmentWizardPanel({
         </button>
         {currentStep < wizardSteps.length - 1 ? (
           <button
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-5 text-sm font-semibold text-white transition hover:bg-[var(--accent-hover)] sm:h-11"
+            aria-disabled={!canContinueStep}
+            className={`inline-flex h-10 items-center justify-center gap-2 rounded-2xl px-5 text-sm font-semibold text-white transition sm:h-11 ${
+              canContinueStep ? "bg-[var(--accent)] hover:bg-[var(--accent-hover)]" : "bg-[var(--text-subtle)]"
+            }`}
             type="button"
             onClick={onNextStep}
           >
@@ -705,10 +988,13 @@ export function AppointmentsPlanner() {
   const { accessToken, refresh, status } = useAdminSession();
   const requestedDate = searchParams.get("date");
   const requestedAppointmentId = searchParams.get("appointmentId");
+  const requestedMode = searchParams.get("mode");
   const datePickerRef = useRef<HTMLInputElement>(null);
+  const handledDeepLinkRef = useRef(false);
+  const todayIsoDate = useMemo(() => getTodayIsoDate(), []);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>(null);
-  const [view, setView] = useState<"day" | "week">("week");
+  const [view, setView] = useState<CalendarView>("week");
   const [selectedDate, setSelectedDate] = useState(() => requestedDate ?? getTodayIsoDate());
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<string | null>(() => requestedAppointmentId);
   const [editingAppointmentId, setEditingAppointmentId] = useState<string | null>(null);
@@ -716,6 +1002,7 @@ export function AppointmentsPlanner() {
   const [furthestStepReached, setFurthestStepReached] = useState(0);
   const [feedbackMessage, setFeedbackMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [wizardValidationMessage, setWizardValidationMessage] = useState("");
   const [cancelReason, setCancelReason] = useState("");
   const [isLoadingReferenceData, setIsLoadingReferenceData] = useState(true);
   const [showWizard, setShowWizard] = useState(false);
@@ -729,6 +1016,7 @@ export function AppointmentsPlanner() {
   const [form, setForm] = useState<AppointmentForm>(() => createInitialForm(getTodayIsoDate()));
 
   const weekDays = useMemo(() => buildWeekDays(selectedDate), [selectedDate]);
+  const monthDays = useMemo(() => buildMonthDays(selectedDate), [selectedDate]);
   const availableServices = useMemo(
     () => services.filter((service) => service.isActive).sort((a, b) => a.sortOrder - b.sortOrder),
     [services],
@@ -788,18 +1076,35 @@ export function AppointmentsPlanner() {
     { id: editingAppointmentId, date: form.date, time: form.time, durationMinutes: durationTotal },
     validationPlannerAppointments,
   );
+  const hasValidTime = isValidMilitaryTime(form.time);
+  const hasClientForStep = Boolean(form.existingClientId || form.clientName.trim());
+  const hasServiceForStep = selectedServices.length > 0;
+  const endTimeMinutes = getAppointmentEndTimeMinutes(form.time, durationTotal);
+  const canContinueStep =
+    currentStep === 0
+      ? hasClientForStep
+      : currentStep === 1
+        ? hasServiceForStep
+        : currentStep === 2
+          ? hasValidTime
+          : true;
   const canSaveAppointment =
-    Boolean(form.existingClientId || form.clientName.trim()) &&
-    selectedServices.length > 0 &&
+    hasClientForStep &&
+    hasServiceForStep &&
     durationTotal > 0 &&
+    hasValidTime &&
     !overlappingAppointment &&
     !isLoadingValidationAppointments &&
     !isSubmitting;
-  const endTimeLabel = durationTotal
-    ? `${String(Math.floor(getAppointmentEndTimeMinutes(form.time, durationTotal) / 60)).padStart(2, "0")}:${String(getAppointmentEndTimeMinutes(form.time, durationTotal) % 60).padStart(2, "0")}`
-    : "--:--";
-  const visibleWeekDays = view === "day" ? weekDays.filter((day) => day.isoDate === selectedDate) : weekDays;
-  const dateNavigationLabel = view === "day" ? formatDayTitle(selectedDate) : formatWeekRangeLabel(selectedDate);
+  const endTimeLabel = durationTotal && endTimeMinutes !== null ? minutesToTimeLabel(endTimeMinutes) : "--:--";
+  const visibleCalendarDays =
+    view === "day" ? weekDays.filter((day) => day.isoDate === selectedDate) : view === "month" ? monthDays : weekDays;
+  const dateNavigationLabel =
+    view === "day"
+      ? formatDayTitle(selectedDate)
+      : view === "month"
+        ? formatMonthLabel(selectedDate)
+        : formatWeekRangeLabel(selectedDate);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(max-width: 1023px)");
@@ -812,12 +1117,16 @@ export function AppointmentsPlanner() {
     return () => mediaQuery.removeEventListener("change", syncViewport);
   }, []);
 
-  async function loadAppointmentsForWeek(sessionAccessToken: string, anchorDate: string) {
-    const anchorWeekDays = buildWeekDays(anchorDate);
+  async function loadAppointmentsForCalendarView(
+    sessionAccessToken: string,
+    anchorDate: string,
+    calendarView: CalendarView,
+  ) {
+    const range = getCalendarRange(calendarView, anchorDate);
     return getAdminAppointments(
       sessionAccessToken,
-      toHavanaOffsetDateTime(anchorWeekDays[0].isoDate, "00:00"),
-      toHavanaOffsetDateTime(anchorWeekDays[anchorWeekDays.length - 1].isoDate, "23:59"),
+      toHavanaOffsetDateTime(range.from, "00:00"),
+      toHavanaOffsetDateTime(range.to, "23:59"),
     );
   }
 
@@ -830,11 +1139,11 @@ export function AppointmentsPlanner() {
   }
 
   async function reloadAppointmentData(sessionAccessToken: string, anchorDate: string, validationDate: string) {
-    const [nextWeekAppointments, nextValidationAppointments] = await Promise.all([
-      loadAppointmentsForWeek(sessionAccessToken, anchorDate),
+    const [nextCalendarAppointments, nextValidationAppointments] = await Promise.all([
+      loadAppointmentsForCalendarView(sessionAccessToken, anchorDate, view),
       loadAppointmentsForDate(sessionAccessToken, validationDate),
     ]);
-    setAppointments(nextWeekAppointments);
+    setAppointments(nextCalendarAppointments);
     setValidationAppointments(nextValidationAppointments);
   }
 
@@ -875,12 +1184,12 @@ export function AppointmentsPlanner() {
     const sessionAccessToken = accessToken;
     let isMounted = true;
 
-    async function loadWeekAppointments() {
+    async function loadCalendarAppointments() {
       setIsLoadingAppointments(true);
       setErrorMessage("");
       try {
         const nextAppointments = await withRefreshedToken(sessionAccessToken, refresh, (currentAccessToken) =>
-          loadAppointmentsForWeek(currentAccessToken, selectedDate),
+          loadAppointmentsForCalendarView(currentAccessToken, selectedDate, view),
         );
         if (!isMounted) return;
         setAppointments(nextAppointments);
@@ -892,11 +1201,11 @@ export function AppointmentsPlanner() {
       }
     }
 
-    void loadWeekAppointments();
+    void loadCalendarAppointments();
     return () => {
       isMounted = false;
     };
-  }, [accessToken, refresh, selectedDate, status]);
+  }, [accessToken, refresh, selectedDate, status, view]);
 
   useEffect(() => {
     if (!accessToken || status !== "authenticated") return;
@@ -925,9 +1234,109 @@ export function AppointmentsPlanner() {
     };
   }, [accessToken, form.date, refresh, status]);
 
+  useEffect(() => {
+    if (handledDeepLinkRef.current || isLoadingReferenceData || isLoadingAppointments) return;
+    if (requestedMode !== "new" && requestedMode !== "edit") return;
+
+    const nextDate = requestedDate ?? selectedDate;
+    const appointment =
+      requestedMode === "edit" && requestedAppointmentId
+        ? plannerAppointments.find((current) => current.id === requestedAppointmentId)
+        : null;
+
+    if (requestedMode === "edit" && !appointment) return;
+
+    handledDeepLinkRef.current = true;
+    const timeoutId = window.setTimeout(() => {
+    if (requestedMode === "new") {
+      setEditingAppointmentId(null);
+      setCurrentStep(0);
+      setFurthestStepReached(0);
+      setForm(createInitialForm(nextDate));
+      setFeedbackMessage("");
+      setErrorMessage("");
+      if (isMobileViewport) {
+        setShowWizard(false);
+        setMobilePanel("wizard");
+      } else {
+        setMobilePanel(null);
+        setShowWizard(true);
+      }
+      return;
+    }
+
+    if (!appointment) return;
+
+    setSelectedAppointmentId(appointment.id);
+    setEditingAppointmentId(appointment.id);
+    setCurrentStep(0);
+    setFurthestStepReached(0);
+    setForm({
+      existingClientId: appointment.clientId,
+      clientName: appointment.client,
+      clientPhone: appointment.clientPhone,
+      selectedServiceIds: appointment.items.map((item) => item.serviceId),
+      touchUpByServiceId: Object.fromEntries(
+        appointment.items.map((item) => [item.serviceId, item.isTouchUp]),
+      ),
+      date: appointment.date,
+      time: appointment.time,
+      mode: appointment.mode,
+      travelFee: String(appointment.travelFee),
+      addressSnapshot: appointment.addressSnapshot ?? "",
+      notes: appointment.notes ?? "",
+    });
+    setCancelReason(appointment.cancelReason ?? "");
+    setFeedbackMessage("");
+    setErrorMessage("");
+
+    if (isMobileViewport) {
+      setShowWizard(false);
+      setMobilePanel("wizard");
+      return;
+    }
+
+    setMobilePanel(null);
+    setShowWizard(true);
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    isLoadingAppointments,
+    isLoadingReferenceData,
+    isMobileViewport,
+    plannerAppointments,
+    requestedAppointmentId,
+    requestedDate,
+    requestedMode,
+    selectedDate,
+  ]);
+
   function clearMessages() {
     setFeedbackMessage("");
     setErrorMessage("");
+    setWizardValidationMessage("");
+  }
+
+  function handleFormChange(updater: (current: AppointmentForm) => AppointmentForm) {
+    setForm(updater);
+    setWizardValidationMessage("");
+  }
+
+  function getStepValidationMessage(stepIndex: number) {
+    if (stepIndex === 0 && !hasClientForStep) {
+      return "Selecciona una clienta existente o registra el nombre de una clienta nueva.";
+    }
+
+    if (stepIndex === 1 && !hasServiceForStep) {
+      return "Selecciona al menos un servicio para continuar.";
+    }
+
+    if (stepIndex === 2 && !hasValidTime) {
+      return "Escribe la hora en formato 24 horas, por ejemplo 09:30 o 14:30.";
+    }
+
+    return "";
   }
 
   function resetWizard(nextDate = selectedDate) {
@@ -951,8 +1360,8 @@ export function AppointmentsPlanner() {
     setForm((current) => ({
       ...current,
       existingClientId: clientId,
-      clientName: client?.fullName ?? current.clientName,
-      clientPhone: client?.whatsapp ?? client?.phone ?? current.clientPhone,
+      clientName: client?.fullName ?? "",
+      clientPhone: client?.whatsapp ?? client?.phone ?? "",
     }));
     clearMessages();
   }
@@ -986,6 +1395,13 @@ export function AppointmentsPlanner() {
   }
 
   function nextStep() {
+    const validationMessage = getStepValidationMessage(currentStep);
+    if (validationMessage) {
+      setWizardValidationMessage(validationMessage);
+      return;
+    }
+
+    setWizardValidationMessage("");
     setCurrentStep((step) => {
       const next = Math.min(step + 1, wizardSteps.length - 1);
       setFurthestStepReached((prev) => Math.max(prev, next));
@@ -1062,6 +1478,11 @@ export function AppointmentsPlanner() {
   }
 
   function shiftDateRange(direction: -1 | 1) {
+    if (view === "month") {
+      handleDayChange(addMonths(selectedDate, direction));
+      return;
+    }
+
     handleDayChange(addDays(selectedDate, view === "week" ? direction * 7 : direction));
   }
 
@@ -1111,6 +1532,9 @@ export function AppointmentsPlanner() {
   async function saveAppointment() {
     if (!accessToken || !canSaveAppointment) return;
     const sessionAccessToken = accessToken;
+    const wasEditingAppointment = Boolean(editingAppointmentId);
+    const savedDate = form.date;
+    const savedClientName = form.clientName.trim();
     setIsSubmitting(true);
     clearMessages();
 
@@ -1137,18 +1561,30 @@ export function AppointmentsPlanner() {
           await createAdminAppointment(currentAccessToken, payload);
         }
 
-        await reloadAppointmentData(currentAccessToken, form.date, form.date);
+        setSelectedDate(savedDate);
+        resetWizard(savedDate);
+        setSelectedAppointmentId(null);
+
+        await reloadAppointmentData(currentAccessToken, savedDate, savedDate);
       });
 
-      setSelectedDate(form.date);
       setFeedbackMessage(
-        editingAppointmentId
-          ? `Cita actualizada para ${form.clientName.trim()}.`
-          : `Cita creada para ${form.clientName.trim()}.`,
+        wasEditingAppointment
+          ? `Cita actualizada para ${savedClientName}.`
+          : `Cita creada para ${savedClientName}.`,
       );
-      resetWizard(form.date);
     } catch (error) {
-      setErrorMessage(getErrorMessage(error, "No se pudo guardar la cita."));
+      const message = getErrorMessage(error, "No se pudo guardar la cita.");
+      setWizardValidationMessage(message);
+      setErrorMessage(message);
+      if (
+        message.toLowerCase().includes("horario") ||
+        message.toLowerCase().includes("fecha") ||
+        message.toLowerCase().includes("hora")
+      ) {
+        setCurrentStep(2);
+        setFurthestStepReached((step) => Math.max(step, 2));
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -1182,6 +1618,11 @@ export function AppointmentsPlanner() {
             ? `La cita de ${appointment.client} fue cancelada.`
             : `La cita de ${appointment.client} regreso a estado confirmada.`,
       );
+      if (nextStatus === "COMPLETED") {
+        setMobilePanel(null);
+        setSelectedAppointmentId(null);
+        setCancelReason("");
+      }
     } catch (error) {
       setErrorMessage(getErrorMessage(error, "No se pudo actualizar el estado de la cita."));
     } finally {
@@ -1234,7 +1675,7 @@ export function AppointmentsPlanner() {
                   Citas
                 </p>
                 <h2 className="mt-1.5 text-xl font-semibold tracking-[-0.04em] text-[var(--text)] sm:mt-2 sm:text-2xl">
-                  Agenda conectada al backend
+                  Calendario de citas
                 </h2>
               </div>
               <button
@@ -1248,9 +1689,9 @@ export function AppointmentsPlanner() {
             </div>
 
             <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="inline-flex rounded-2xl bg-[var(--surface-muted)] p-1 text-sm font-semibold">
+              <div className="inline-flex w-full overflow-x-auto rounded-2xl bg-[var(--surface-muted)] p-1 text-sm font-semibold sm:w-auto">
                 <button
-                  className={`flex items-center gap-1.5 rounded-xl px-4 py-2 transition ${
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2 transition sm:flex-none sm:px-4 ${
                     view === "day"
                       ? "bg-[var(--accent)] text-white"
                       : "text-[var(--text-muted)] hover:text-[var(--text)]"
@@ -1262,7 +1703,7 @@ export function AppointmentsPlanner() {
                   Dia
                 </button>
                 <button
-                  className={`flex items-center gap-1.5 rounded-xl px-4 py-2 transition ${
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2 transition sm:flex-none sm:px-4 ${
                     view === "week"
                       ? "bg-[var(--accent)] text-white"
                       : "text-[var(--text-muted)] hover:text-[var(--text)]"
@@ -1272,6 +1713,18 @@ export function AppointmentsPlanner() {
                 >
                   <CalendarDays className="h-4 w-4" />
                   Semana
+                </button>
+                <button
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2 transition sm:flex-none sm:px-4 ${
+                    view === "month"
+                      ? "bg-[var(--accent)] text-white"
+                      : "text-[var(--text-muted)] hover:text-[var(--text)]"
+                  }`}
+                  type="button"
+                  onClick={() => setView("month")}
+                >
+                  <CalendarDays className="h-4 w-4" />
+                  Mes
                 </button>
               </div>
 
@@ -1322,29 +1775,51 @@ export function AppointmentsPlanner() {
               aria-hidden="true"
             />
 
-            <div className="mt-4 grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(4.5rem,1fr))] sm:gap-2.5">
-              {visibleWeekDays.map((day) => {
+            <div className={`mt-4 grid gap-1.5 sm:gap-2.5 ${
+              view === "month" ? "grid-cols-7" : "[grid-template-columns:repeat(auto-fit,minmax(4.5rem,1fr))]"
+            }`}>
+              {visibleCalendarDays.map((day) => {
                 const count = plannerAppointments.filter((appointment) => appointment.date === day.isoDate).length;
                 const active = selectedDate === day.isoDate;
+                const isToday = day.isoDate === todayIsoDate;
+                const loadLevel = Math.min(count, 3) * (100 / 3);
+                const showLoadAnimation = view !== "day";
 
                 return (
                   <button
                     key={day.isoDate}
-                    className={`min-w-0 w-full rounded-[1.1rem] px-2.5 py-2.5 text-center transition sm:px-3 sm:py-3 ${
-                      active
+                    className={`appointment-load-card relative isolate min-w-0 w-full overflow-hidden rounded-[1.1rem] px-1.5 py-2 text-center transition sm:px-3 sm:py-3 ${
+                      isToday
                         ? "bg-[var(--accent)] text-white"
+                        : active
+                          ? "border border-[var(--accent)] bg-[var(--surface)] text-[var(--text)]"
                         : "bg-[var(--surface-muted)] text-[var(--text)] hover:bg-[var(--secondary-btn)]"
                     }`}
                     type="button"
                     onClick={() => handleDayChange(day.isoDate)}
+                    data-has-load={showLoadAnimation && count > 0}
+                    style={
+                      showLoadAnimation
+                        ? ({
+                            "--appointment-load-level": `${loadLevel}%`,
+                            "--appointment-load-strong": isToday
+                              ? "rgba(255,255,255,0.34)"
+                              : "rgba(230,0,35,0.26)",
+                            "--appointment-load-soft": isToday
+                              ? "rgba(255,255,255,0.18)"
+                              : "rgba(230,0,35,0.14)",
+                          } as CSSProperties)
+                        : undefined
+                    }
                   >
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.14em] opacity-80 sm:text-xs">
+                    {showLoadAnimation ? <span className="appointment-load-water" aria-hidden="true" /> : null}
+                    <span className="relative z-10 text-[10px] font-semibold uppercase tracking-[0.14em] opacity-80 sm:text-xs">
                       {day.label}
                     </span>
-                    <span className="mt-0.5 block text-sm font-bold tabular-nums sm:text-base">{day.date}</span>
+                    <span className="relative z-10 mt-0.5 block text-sm font-bold tabular-nums sm:text-base">{day.date}</span>
                     <span
-                      className={`mt-1 block max-w-full text-[10px] leading-3 sm:text-xs ${
-                        active ? "text-white/70" : "text-[var(--text-muted)]"
+                      className={`relative z-10 mt-1 block max-w-full text-[10px] leading-3 sm:text-xs ${
+                        isToday ? "text-white/70" : active ? "text-[var(--accent)]" : "text-[var(--text-muted)]"
                       }`}
                     >
                       {count} citas
@@ -1459,10 +1934,12 @@ export function AppointmentsPlanner() {
               onSave={() => void saveAppointment()}
               isSubmitting={isSubmitting}
               canSaveAppointment={canSaveAppointment}
+              canContinueStep={canContinueStep}
+              validationMessage={wizardValidationMessage}
               clients={clients}
               form={form}
               onExistingClientChange={handleExistingClientChange}
-              onFormChange={setForm}
+              onFormChange={handleFormChange}
               servicesByCategory={servicesByCategory}
               toggleService={toggleService}
               toggleTouchUp={toggleTouchUp}
@@ -1537,10 +2014,12 @@ export function AppointmentsPlanner() {
             onSave={() => void saveAppointment()}
             isSubmitting={isSubmitting}
             canSaveAppointment={canSaveAppointment}
+            canContinueStep={canContinueStep}
+            validationMessage={wizardValidationMessage}
             clients={clients}
             form={form}
             onExistingClientChange={handleExistingClientChange}
-            onFormChange={setForm}
+            onFormChange={handleFormChange}
             servicesByCategory={servicesByCategory}
             toggleService={toggleService}
             toggleTouchUp={toggleTouchUp}

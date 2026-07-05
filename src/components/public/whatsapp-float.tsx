@@ -9,7 +9,7 @@ export function WhatsAppFloat({ message, phoneNumber }: Readonly<WhatsAppFloatPr
 
   return (
     <a
-      className="fixed bottom-5 right-4 z-50 inline-flex h-12 items-center justify-center rounded-2xl border border-[var(--border)] bg-[rgba(255,255,255,0.94)] px-4 text-sm font-semibold text-[var(--text)] shadow-[0_12px_30px_rgba(33,25,34,0.14)] transition hover:border-[rgba(33,25,34,0.2)] sm:bottom-6 sm:right-6"
+      className="fixed bottom-5 right-4 z-50 hidden h-12 items-center justify-center rounded-2xl border border-[var(--border)] bg-[rgba(255,255,255,0.94)] px-4 text-sm font-semibold text-[var(--text)] shadow-[0_12px_30px_rgba(33,25,34,0.14)] transition hover:border-[rgba(33,25,34,0.2)] sm:bottom-6 sm:right-6 sm:inline-flex"
       href={createWhatsAppUrl("floating", message, phoneNumber)}
       target="_blank"
       rel="noreferrer"
