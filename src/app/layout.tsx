@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sileo";
 
@@ -23,6 +23,13 @@ export const metadata: Metadata = {
   },
   description:
     "Landing, CMS y dashboard para Jeni's Lashes & Brows. Agenda por WhatsApp y gestiona citas, contenido y finanzas desde un solo sistema.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({

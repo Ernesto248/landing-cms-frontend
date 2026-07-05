@@ -476,12 +476,19 @@ function AppointmentWizardPanel({
   const dateInputValue = dateInput.formDate === form.date ? dateInput.value : formatDisplayDate(form.date);
   const openNativePicker = (input: HTMLInputElement | null) => {
     if (!input) return;
-    if (typeof input.showPicker === "function") {
-      input.showPicker();
-      return;
+    try {
+      if (typeof input.showPicker === "function") {
+        input.showPicker();
+        return;
+      }
+    } catch {
+      // Some mobile browsers only allow the native picker from the direct input tap.
     }
     input.focus();
-    input.click();
+    if (document.activeElement !== input) {
+      input.click();
+      return;
+    }
   };
 
   return (
@@ -700,7 +707,7 @@ function AppointmentWizardPanel({
               Fecha
               <div className="mt-2 flex h-12 overflow-hidden rounded-2xl border border-[var(--border-input)] bg-[var(--surface)]">
                 <input
-                  className="min-w-0 flex-1 bg-transparent px-4 text-sm outline-none"
+                  className="min-w-0 flex-1 bg-transparent px-4 text-base outline-none sm:text-sm"
                   inputMode="numeric"
                   maxLength={10}
                   placeholder="DD/MM/YYYY"
@@ -719,27 +726,22 @@ function AppointmentWizardPanel({
                     }
                   }}
                 />
-                <button
-                  aria-label="Abrir calendario"
-                  className="flex w-12 shrink-0 items-center justify-center border-l border-[var(--secondary-btn)] text-[var(--text-muted)] transition hover:bg-[var(--surface-muted)] hover:text-[var(--accent)]"
-                  type="button"
-                  onClick={() => openNativePicker(nativeDateInputRef.current)}
-                >
-                  <CalendarDays className="h-4 w-4" />
-                </button>
-                <input
-                  ref={nativeDateInputRef}
-                  aria-hidden="true"
-                  className="sr-only"
-                  tabIndex={-1}
-                  type="date"
-                  value={form.date}
-                  onChange={(event) => {
-                    if (!event.target.value) return;
-                    setDateInput({ formDate: event.target.value, value: formatDisplayDate(event.target.value) });
-                    onFormChange((current) => ({ ...current, date: event.target.value }));
-                  }}
-                />
+                <span className="relative flex w-12 shrink-0 items-center justify-center border-l border-[var(--secondary-btn)] text-[var(--text-muted)] transition hover:bg-[var(--surface-muted)] hover:text-[var(--accent)]">
+                  <CalendarDays className="pointer-events-none h-4 w-4" />
+                  <input
+                    ref={nativeDateInputRef}
+                    aria-label="Abrir calendario"
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                    type="date"
+                    value={form.date}
+                    onClick={(event) => openNativePicker(event.currentTarget)}
+                    onChange={(event) => {
+                      if (!event.target.value) return;
+                      setDateInput({ formDate: event.target.value, value: formatDisplayDate(event.target.value) });
+                      onFormChange((current) => ({ ...current, date: event.target.value }));
+                    }}
+                  />
+                </span>
               </div>
               <span className="mt-1 block text-xs font-medium text-[var(--text-muted)]">Formato DD/MM/YYYY</span>
             </label>
@@ -747,7 +749,7 @@ function AppointmentWizardPanel({
               Hora de inicio
               <div className="mt-2 flex h-12 overflow-hidden rounded-2xl border border-[var(--border-input)] bg-[var(--surface)]">
                 <input
-                  className="min-w-0 flex-1 bg-transparent px-4 text-sm outline-none"
+                  className="min-w-0 flex-1 bg-transparent px-4 text-base outline-none sm:text-sm"
                   inputMode="numeric"
                   maxLength={5}
                   placeholder="14:30"
@@ -757,26 +759,21 @@ function AppointmentWizardPanel({
                     onFormChange((current) => ({ ...current, time: nextTime }));
                   }}
                 />
-                <button
-                  aria-label="Abrir selector de hora"
-                  className="flex w-12 shrink-0 items-center justify-center border-l border-[var(--secondary-btn)] text-[var(--text-muted)] transition hover:bg-[var(--surface-muted)] hover:text-[var(--accent)]"
-                  type="button"
-                  onClick={() => openNativePicker(nativeTimeInputRef.current)}
-                >
-                  <Clock className="h-4 w-4" />
-                </button>
-                <input
-                  ref={nativeTimeInputRef}
-                  aria-hidden="true"
-                  className="sr-only"
-                  tabIndex={-1}
-                  type="time"
-                  value={isValidMilitaryTime(form.time) ? form.time : ""}
-                  onChange={(event) => {
-                    if (!event.target.value) return;
-                    onFormChange((current) => ({ ...current, time: event.target.value }));
-                  }}
-                />
+                <span className="relative flex w-12 shrink-0 items-center justify-center border-l border-[var(--secondary-btn)] text-[var(--text-muted)] transition hover:bg-[var(--surface-muted)] hover:text-[var(--accent)]">
+                  <Clock className="pointer-events-none h-4 w-4" />
+                  <input
+                    ref={nativeTimeInputRef}
+                    aria-label="Abrir selector de hora"
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                    type="time"
+                    value={isValidMilitaryTime(form.time) ? form.time : ""}
+                    onClick={(event) => openNativePicker(event.currentTarget)}
+                    onChange={(event) => {
+                      if (!event.target.value) return;
+                      onFormChange((current) => ({ ...current, time: event.target.value }));
+                    }}
+                  />
+                </span>
               </div>
               <span
                 className={`mt-1 block text-xs font-medium ${
