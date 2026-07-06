@@ -25,8 +25,7 @@ type HomePageContentProps = {
 gsap.registerPlugin(useGSAP, ScrollTrigger);
 
 export function HomePageContent({ siteData }: Readonly<HomePageContentProps>) {
-  const { businessHours, businessProfile, content, galleryItems, services, testimonials } = siteData;
-  const displayedTestimonials = testimonials.slice(0, 2);
+  const { businessProfile, content, galleryItems, services } = siteData;
   const pageRef = useRef<HTMLElement>(null);
 
   const galleryByCategory = useMemo(() => {
@@ -475,37 +474,37 @@ export function HomePageContent({ siteData }: Readonly<HomePageContentProps>) {
                     </span>
                   </div>
 
-                  <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] lg:mx-0 lg:grid lg:grid-cols-2 lg:overflow-visible lg:px-0">
+                  <div className="grid grid-cols-2 gap-3 lg:grid-cols-2 lg:gap-4">
                     {categoryServices.map((service) => (
                       <button
                         key={service.slug}
-                        className="group flex min-h-[15rem] w-[82vw] max-w-[22rem] shrink-0 snap-start flex-col justify-between rounded-[1.65rem] border border-[var(--border)] bg-[var(--surface)] p-5 text-left shadow-[0_14px_34px_rgba(33,25,34,0.06)] transition active:scale-[0.99] hover:-translate-y-0.5 hover:border-[rgba(230,0,35,0.26)] lg:w-auto lg:max-w-none"
+                        className="group flex min-h-[12.5rem] flex-col justify-between rounded-[1.25rem] border border-[var(--border)] bg-[var(--surface)] p-3 text-left shadow-[0_14px_34px_rgba(33,25,34,0.06)] transition active:scale-[0.99] hover:-translate-y-0.5 hover:border-[rgba(230,0,35,0.26)] sm:min-h-[15rem] sm:rounded-[1.65rem] sm:p-5"
                         type="button"
                         onClick={() => setSelectedService(service)}
                       >
                         <div>
-                          <div className="flex items-start justify-between gap-4">
-                            <div>
-                              <h4 className="text-[1.08rem] font-semibold leading-tight text-[var(--text)]">{service.name}</h4>
-                              <p className="mt-3 text-[0.96rem] leading-6 text-[var(--text-muted)]">{service.description}</p>
+                          <div className="flex items-start justify-between gap-3 sm:gap-4">
+                            <div className="min-w-0">
+                              <h4 className="text-[0.96rem] font-semibold leading-tight text-[var(--text)] sm:text-[1.08rem]">{service.name}</h4>
+                              <p className="mt-3 hidden text-[0.96rem] leading-6 text-[var(--text-muted)] sm:block">{service.description}</p>
                             </div>
-                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--surface-muted)] text-[var(--text-muted)] transition group-hover:bg-[var(--danger-bg)] group-hover:text-[var(--danger)]">
+                            <span className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--surface-muted)] text-[var(--text-muted)] transition group-hover:bg-[var(--danger-bg)] group-hover:text-[var(--danger)] sm:flex">
                               <ChevronRight className="h-4 w-4" aria-hidden="true" />
                             </span>
                           </div>
                         </div>
-                        <div className="mt-5 space-y-3">
-                          <div className="flex items-end justify-between gap-3">
-                            <span className="text-2xl font-semibold text-[var(--text)]">
+                        <div className="mt-4 space-y-2 sm:mt-5 sm:space-y-3">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
+                            <span className="text-lg font-semibold text-[var(--text)] sm:text-2xl">
                               {formatPrice(service.basePrice)}
                             </span>
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--surface-muted)] px-3 py-1.5 text-sm font-semibold text-[var(--danger)]">
+                            <span className="inline-flex w-fit items-center gap-1 rounded-full bg-[var(--surface-muted)] px-2 py-1 text-xs font-semibold text-[var(--danger)] sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-sm">
                               <Clock className="h-3.5 w-3.5" aria-hidden="true" />
                             {formatDuration(service.durationMinutes)}
                           </span>
                           </div>
                           {service.supportsTouchUp ? (
-                            <p className="rounded-[1rem] bg-[var(--danger-bg)] px-3 py-2 text-sm font-semibold text-[var(--danger)]">
+                            <p className="rounded-[0.9rem] bg-[var(--danger-bg)] px-2 py-1.5 text-xs font-semibold text-[var(--danger)] sm:rounded-[1rem] sm:px-3 sm:py-2 sm:text-sm">
                               Retoque: {formatPrice(service.basePrice - (service.touchUpDiscount ?? 500))}
                             </p>
                           ) : null}
@@ -519,33 +518,7 @@ export function HomePageContent({ siteData }: Readonly<HomePageContentProps>) {
           </div>
         </section>
 
-        <section data-section-reveal className="mx-auto grid w-full max-w-6xl gap-4 px-4 py-12 sm:px-6 lg:grid-cols-[0.95fr_1.05fr] lg:px-8 lg:py-16">
-          <article data-reveal-item className="rounded-[2rem] bg-[var(--surface-inverse)] p-5 text-[var(--text-on-dark)]">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--text-on-dark)]/85">Como funciona</p>
-            <ol className="mt-5 space-y-3 text-base leading-7 text-[var(--text-subtle)]">
-              <li>1. La clienta escribe por WhatsApp.</li>
-              <li>2. Se confirma servicio, modalidad y horario.</li>
-              <li>3. La cita se registra manualmente en el dashboard.</li>
-            </ol>
-          </article>
-
-          <div className="grid gap-4">
-            {displayedTestimonials.map((testimonial) => (
-              <article
-                key={`${testimonial.clientName}-${testimonial.text}`}
-                data-reveal-item
-                className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5"
-              >
-                <p className="text-[1.02rem] leading-8 text-[var(--text-muted)]">&ldquo;{testimonial.text}&rdquo;</p>
-                <p className="mt-4 text-sm font-semibold uppercase tracking-[0.16em] text-[var(--text-subtle)]">
-                  {testimonial.clientName}
-                </p>
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section data-section-reveal className="mx-auto grid w-full max-w-6xl gap-4 px-4 py-12 sm:px-6 lg:grid-cols-[1.1fr_0.9fr] lg:px-8 lg:py-16">
+        <section data-section-reveal className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
           <article data-reveal-item className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
               Ubicacion y modalidad
@@ -566,26 +539,10 @@ export function HomePageContent({ siteData }: Readonly<HomePageContentProps>) {
               </div>
             </div>
           </article>
-
-          <article data-reveal-item className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5">
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--text-subtle)]">Horario base</p>
-            <p className="mt-3 text-sm leading-7 text-[var(--text-muted)]">{content.schedule}</p>
-            <div className="mt-5 space-y-3">
-              {businessHours.slice(0, 3).map((entry) => (
-                <div
-                  key={entry.day}
-                  className="flex items-center justify-between rounded-[1.2rem] bg-[var(--surface-muted)] px-4 py-3 text-sm"
-                >
-                  <span className="font-medium text-[var(--text)]">{entry.day}</span>
-                  <span className="text-[var(--text-muted)]">{entry.hours}</span>
-                </div>
-              ))}
-            </div>
-          </article>
         </section>
 
         <section data-section-reveal className="mx-auto my-12 w-[calc(100%-2rem)] max-w-6xl overflow-hidden rounded-[2rem] bg-[var(--surface-inverse)] p-6 text-[var(--text-on-dark)] sm:w-[calc(100%-3rem)] sm:p-8 lg:my-16">
-          <p data-reveal-item className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--text-on-dark)]/85">CTA final</p>
+          <p data-reveal-item className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--text-on-dark)]/85">Reserva por WhatsApp</p>
           <div className="mt-4 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-2xl">
               <h2 data-reveal-item className="text-[2rem] font-semibold sm:text-4xl">
@@ -598,7 +555,7 @@ export function HomePageContent({ siteData }: Readonly<HomePageContentProps>) {
 
             <div data-reveal-item className="flex flex-col gap-3 sm:flex-row">
               <a
-                className="inline-flex h-12 items-center justify-center rounded-2xl bg-[var(--surface)] px-5 text-sm font-semibold text-[var(--text)] transition hover:bg-[var(--surface-muted)]"
+                className="inline-flex h-12 items-center justify-center rounded-2xl bg-[var(--accent)] px-5 text-sm font-semibold text-white shadow-[0_16px_32px_rgba(230,0,35,0.24)] transition hover:bg-[var(--accent-hover)]"
                 href={createWhatsAppUrl(
                   "footer",
                   content.whatsappMessage,

@@ -690,8 +690,8 @@ export function ContentEditor() {
   }
 
   return (
-    <main className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
-      <section className="space-y-4">
+    <main className="min-w-0 grid gap-5 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+      <section className="min-w-0 space-y-4">
         <article className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">CMS</p>
           <h2 className="mt-3 text-2xl font-semibold tracking-[-0.04em] text-[var(--text)]">
@@ -716,7 +716,7 @@ export function ContentEditor() {
           return (
             <article
               key={section}
-              className="rounded-[1.75rem] border border-[var(--border)] bg-[var(--surface)] p-5"
+              className="min-w-0 overflow-hidden rounded-[1.75rem] border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5"
             >
               <button
                 className="flex w-full items-center justify-between gap-3 text-left"
@@ -730,7 +730,7 @@ export function ContentEditor() {
               </button>
 
               {open ? (
-                <div className="mt-4 space-y-4">
+                <div className="mt-4 min-w-0 space-y-4">
                   {section === "Hero" ? (
                     <>
                       <input
@@ -864,19 +864,19 @@ export function ContentEditor() {
                         }}
                       />
 
-                      <div className="rounded-[1.5rem] bg-[var(--surface-muted)] p-4">
+                      <div className="min-w-0 overflow-hidden rounded-[1.5rem] bg-[var(--surface-muted)] p-4">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                          <div>
+                          <div className="min-w-0">
                             <p className="text-sm font-semibold text-[var(--text)]">Imagenes publicadas</p>
                             <p className="mt-1 text-sm text-[var(--text-muted)]">
                               {editorState.galleryItems.length
                                 ? `${editorState.galleryItems.length} imagen${editorState.galleryItems.length === 1 ? "" : "es"} lista${editorState.galleryItems.length === 1 ? "" : "s"} para la landing.`
-                                : "Aun no hay imagenes en la galeria publica."}
+                              : "Aun no hay imagenes en la galeria publica."}
                             </p>
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="grid min-w-0 gap-2 sm:w-auto sm:grid-cols-[minmax(12rem,1fr)_auto] sm:items-center">
                             <select
-                              className="h-10 rounded-xl border border-[var(--border-input)] bg-[var(--surface)] px-3 text-sm"
+                              className="h-10 min-w-0 rounded-xl border border-[var(--border-input)] bg-[var(--surface)] px-3 text-sm"
                               value={pendingGalleryServiceId}
                               onChange={(e) => setPendingGalleryServiceId(e.target.value)}
                             >
@@ -900,15 +900,15 @@ export function ContentEditor() {
                       </div>
 
                       {editorState.galleryItems.length ? (
-                        <div className="space-y-4">
+                        <div className="min-w-0 space-y-4">
                           {editorState.galleryItems.map((item, index) => (
                             <div
                               key={item.id}
-                              className="rounded-[1.4rem] border border-[var(--border)] bg-[var(--surface-muted)] p-4"
+                              className="min-w-0 overflow-hidden rounded-[1.4rem] border border-[var(--border)] bg-[var(--surface-muted)] p-3 sm:p-4"
                             >
-                              <div className="grid gap-4 lg:grid-cols-[14rem_minmax(0,1fr)]">
-                                <div className="space-y-3">
-                                  <div className="relative overflow-hidden rounded-[1.25rem] bg-[var(--surface)] aspect-[4/5]">
+                              <div className="grid min-w-0 gap-4 lg:grid-cols-[14rem_minmax(0,1fr)]">
+                                <div className="min-w-0 space-y-3">
+                                  <div className="relative aspect-[4/5] min-w-0 overflow-hidden rounded-[1.25rem] bg-[var(--surface)]">
                                     {item.publicUrl ? (
                                       <Image
                                         src={item.publicUrl}
@@ -933,9 +933,9 @@ export function ContentEditor() {
                                     </span>
                                   </div>
 
-                                  <div className="flex flex-wrap gap-2">
+                                  <div className="grid gap-2 sm:flex sm:flex-wrap">
                                     <button
-                                      className="inline-flex h-9 items-center justify-center rounded-xl bg-[var(--surface)] px-4 text-xs font-semibold text-[var(--text)]"
+                                      className="inline-flex h-9 min-w-0 items-center justify-center rounded-xl bg-[var(--surface)] px-3 text-xs font-semibold text-[var(--text)] sm:px-4"
                                       type="button"
                                       onClick={() => openGalleryPicker(index)}
                                       disabled={uploadingIndex !== null}
@@ -944,7 +944,7 @@ export function ContentEditor() {
                                     </button>
                                     {item.publicUrl ? (
                                       <a
-                                        className="inline-flex h-9 items-center justify-center rounded-xl border border-[var(--border)] px-4 text-xs font-semibold text-[var(--text)]"
+                                        className="inline-flex h-9 min-w-0 items-center justify-center rounded-xl border border-[var(--border)] px-3 text-xs font-semibold text-[var(--text)] sm:px-4"
                                         href={item.publicUrl}
                                         target="_blank"
                                         rel="noreferrer"
@@ -955,9 +955,9 @@ export function ContentEditor() {
                                   </div>
                                 </div>
 
-                                <div>
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div>
+                                <div className="min-w-0">
+                                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                    <div className="min-w-0">
                                       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-subtle)]">
                                         Item {index + 1}
                                       </p>
@@ -966,7 +966,7 @@ export function ContentEditor() {
                                       </p>
                                     </div>
                                     <button
-                                      className="inline-flex h-9 items-center justify-center rounded-xl bg-[var(--danger-bg)] px-4 text-xs font-semibold text-[var(--danger)]"
+                                      className="inline-flex h-9 w-full items-center justify-center rounded-xl bg-[var(--danger-bg)] px-4 text-xs font-semibold text-[var(--danger)] sm:w-auto"
                                       type="button"
                                       onClick={() => void removeGalleryItem(item.id, index)}
                                     >
@@ -977,7 +977,7 @@ export function ContentEditor() {
                                   <label className="mt-4 block text-sm font-medium text-[var(--text)]">
                                     Titulo
                                     <input
-                                      className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4"
+                                      className="mt-2 h-12 min-w-0 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4"
                                       value={item.title}
                                       onChange={(event) => updateGalleryItem(index, "title", event.target.value)}
                                     />
@@ -985,7 +985,7 @@ export function ContentEditor() {
                                   <label className="mt-3 block text-sm font-medium text-[var(--text)]">
                                     Servicio relacionado
                                     <select
-                                      className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
+                                      className="mt-2 h-12 min-w-0 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
                                       value={item.serviceId ?? ""}
                                       onChange={(event) => {
                                         const sid = event.target.value || null;
@@ -1011,7 +1011,7 @@ export function ContentEditor() {
                                   <label className="mt-3 block text-sm font-medium text-[var(--text)]">
                                     Descripcion
                                     <textarea
-                                      className="mt-2 min-h-24 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 py-3"
+                                      className="mt-2 min-h-24 min-w-0 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 py-3"
                                       value={item.description}
                                       onChange={(event) => updateGalleryItem(index, "description", event.target.value)}
                                     />
