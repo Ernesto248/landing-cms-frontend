@@ -44,7 +44,7 @@ export const metadata: Metadata = {
     siteName: "Jeni's Lashes & Brows",
     images: [
       {
-        url: "/og-logo.png",
+        url: "/og-logo-camaguey-v2.png",
         width: 1200,
         height: 630,
         alt: "Jeni's Lashes & Brows",
@@ -57,7 +57,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Jeni's Lashes & Brows",
     description: "Cejas y pestanas en Camaguey. Agenda por WhatsApp.",
-    images: ["/og-logo.png"],
+    images: ["/og-logo-camaguey-v2.png"],
   },
 };
 
