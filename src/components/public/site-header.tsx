@@ -24,7 +24,7 @@ export function SiteHeader({ whatsappNumber, whatsappMessage }: Readonly<SiteHea
           className="flex min-w-0 max-w-[12rem] items-center gap-2 text-sm font-semibold tracking-[-0.02em] text-[var(--text)] sm:max-w-none"
         >
           <Image
-            src="/brand-mark.svg"
+            src="/brand-logo.png"
             alt=""
             width={32}
             height={32}

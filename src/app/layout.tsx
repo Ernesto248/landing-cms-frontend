@@ -33,9 +33,9 @@ export const metadata: Metadata = {
   description:
     "Landing, CMS y dashboard para Jeni's Lashes & Brows. Agenda por WhatsApp y gestiona citas, contenido y finanzas desde un solo sistema.",
   icons: {
-    icon: [{ url: "/brand-mark.svg", type: "image/svg+xml" }],
-    shortcut: [{ url: "/brand-mark.svg", type: "image/svg+xml" }],
-    apple: [{ url: "/brand-mark.svg", type: "image/svg+xml" }],
+    icon: [{ url: "/brand-logo.png", type: "image/png", sizes: "512x512" }],
+    shortcut: [{ url: "/brand-logo.png", type: "image/png", sizes: "512x512" }],
+    apple: [{ url: "/brand-logo.png", type: "image/png", sizes: "512x512" }],
   },
   openGraph: {
     title: "Jeni's Lashes & Brows",
