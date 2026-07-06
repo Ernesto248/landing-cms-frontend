@@ -22,7 +22,7 @@ export type GalleryItem = {
 
 export const businessProfile = {
   brandName: "Jeni's Lashes & Brows",
-  city: "La Habana",
+  city: "Camaguey",
   country: "Cuba",
   addressLine: "Cornelio Porro #172 altos entre 5 y 6 Garrido",
   phoneWhatsapp: "55902529",

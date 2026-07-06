@@ -13,7 +13,7 @@ export function SiteFooter({ siteData }: Readonly<SiteFooterProps>) {
         <div className="space-y-3">
           <p className="text-base font-semibold text-white">Jeni&apos;s Lashes & Brows</p>
           <p className="leading-6 text-[var(--text-subtle)]">
-            Cejas y pestanas en La Habana con atencion cuidada, agenda por WhatsApp y
+            Cejas y pestanas en Camaguey con atencion cuidada, agenda por WhatsApp y
             servicios en estudio o domicilio.
           </p>
         </div>
