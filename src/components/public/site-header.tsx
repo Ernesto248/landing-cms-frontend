@@ -10,8 +10,9 @@ type SiteHeaderProps = {
 };
 
 const navigation = [
-  { href: "#galeria", label: "Galeria" },
-  { href: "#servicios", label: "Servicios" },
+  { href: "/", label: "Inicio" },
+  { href: "/#galeria", label: "Galeria" },
+  { href: "/#servicios", label: "Servicios" },
   { href: "/contacto", label: "Contacto" },
 ];
 
