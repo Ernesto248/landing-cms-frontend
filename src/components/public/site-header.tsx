@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -18,8 +19,19 @@ export function SiteHeader({ whatsappNumber, whatsappMessage }: Readonly<SiteHea
   return (
     <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[var(--surface)]/90 backdrop-blur">
       <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
-        <Link href="/" className="max-w-[10rem] text-sm font-semibold tracking-[-0.02em] text-[var(--text)] sm:max-w-none">
-          Jeni&apos;s Lashes & Brows
+        <Link
+          href="/"
+          className="flex min-w-0 max-w-[12rem] items-center gap-2 text-sm font-semibold tracking-[-0.02em] text-[var(--text)] sm:max-w-none"
+        >
+          <Image
+            src="/brand-mark.svg"
+            alt=""
+            width={32}
+            height={32}
+            className="h-8 w-8 shrink-0 rounded-xl"
+            priority
+          />
+          <span className="min-w-0 leading-tight">Jeni&apos;s Lashes & Brows</span>
         </Link>
 
         <nav className="hidden items-center gap-5 text-sm font-medium text-[var(--text-muted)] md:flex">

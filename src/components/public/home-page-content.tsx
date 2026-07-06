@@ -220,9 +220,9 @@ export function HomePageContent({ siteData }: Readonly<HomePageContentProps>) {
                   <h1 data-hero-reveal className="max-w-[21rem] text-[clamp(2.35rem,12vw,3.35rem)] font-semibold leading-[0.95] text-white [text-wrap:balance] sm:max-w-3xl sm:text-[4rem] lg:text-[4.65rem]">
                     {content.heroTitle}
                   </h1>
-                  <div data-hero-reveal className="flex flex-col gap-3 pt-1 sm:max-w-none sm:flex-row">
+                  <div data-hero-reveal className="grid grid-cols-2 gap-2 pt-1 sm:flex sm:max-w-none sm:gap-3">
                     <a
-                      className="inline-flex h-12 items-center justify-center rounded-2xl bg-[var(--accent)] px-5 text-base font-semibold text-white shadow-[0_16px_32px_rgba(230,0,35,0.28)] transition hover:bg-[var(--accent-hover)] sm:w-auto"
+                      className="inline-flex h-11 min-w-0 items-center justify-center rounded-2xl bg-[var(--accent)] px-3 text-sm font-semibold text-white shadow-[0_16px_32px_rgba(230,0,35,0.28)] transition hover:bg-[var(--accent-hover)] sm:h-12 sm:w-auto sm:px-5 sm:text-base"
                       href={createWhatsAppUrl(
                         "hero",
                         content.whatsappMessage,
@@ -231,13 +231,15 @@ export function HomePageContent({ siteData }: Readonly<HomePageContentProps>) {
                       target="_blank"
                       rel="noreferrer"
                     >
-                      Agendar por WhatsApp
+                      <span className="sm:hidden">WhatsApp</span>
+                      <span className="hidden sm:inline">Agendar por WhatsApp</span>
                     </a>
                     <Link
-                      className="inline-flex h-12 items-center justify-center rounded-2xl border border-white/10 bg-[var(--surface)]/12 px-5 text-base font-semibold text-white backdrop-blur transition hover:bg-[var(--surface)]/20 sm:w-auto"
+                      className="inline-flex h-11 min-w-0 items-center justify-center rounded-2xl border border-white/10 bg-[var(--surface)]/12 px-3 text-sm font-semibold text-white backdrop-blur transition hover:bg-[var(--surface)]/20 sm:h-12 sm:w-auto sm:px-5 sm:text-base"
                       href="#servicios"
                     >
-                      Ver servicios
+                      <span className="sm:hidden">Servicios</span>
+                      <span className="hidden sm:inline">Ver servicios</span>
                     </Link>
                   </div>
                   <p data-hero-reveal className="hidden max-w-md text-sm font-medium leading-6 text-white/74 sm:block">
@@ -316,10 +318,7 @@ export function HomePageContent({ siteData }: Readonly<HomePageContentProps>) {
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/76 via-black/10 to-transparent" />
                         <div className="absolute inset-x-0 bottom-0 p-4">
-                          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/80">
-                            {coverImage.serviceCategory}
-                          </p>
-                          <p className="mt-1 text-sm font-semibold text-white leading-tight">
+                          <p className="text-sm font-semibold leading-tight text-white">
                             {serviceName}
                           </p>
                           <p className="mt-1 text-[11px] text-white/60">

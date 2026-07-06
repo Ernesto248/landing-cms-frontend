@@ -6,6 +6,14 @@ import { ThemeProvider } from "@/components/theme-provider";
 
 import "./globals.css";
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL
+  ? process.env.NEXT_PUBLIC_SITE_URL
+  : process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : "http://localhost:3000";
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -17,12 +25,40 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: {
     default: "Jeni's Lashes & Brows | Cejas y pestanas en La Habana",
     template: "%s | Jeni's Lashes & Brows",
   },
   description:
     "Landing, CMS y dashboard para Jeni's Lashes & Brows. Agenda por WhatsApp y gestiona citas, contenido y finanzas desde un solo sistema.",
+  icons: {
+    icon: [{ url: "/brand-mark.svg", type: "image/svg+xml" }],
+    shortcut: [{ url: "/brand-mark.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/brand-mark.svg", type: "image/svg+xml" }],
+  },
+  openGraph: {
+    title: "Jeni's Lashes & Brows",
+    description: "Cejas y pestanas en La Habana. Agenda por WhatsApp.",
+    url: "/",
+    siteName: "Jeni's Lashes & Brows",
+    images: [
+      {
+        url: "/og-logo.png",
+        width: 1200,
+        height: 630,
+        alt: "Jeni's Lashes & Brows",
+      },
+    ],
+    locale: "es_CU",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Jeni's Lashes & Brows",
+    description: "Cejas y pestanas en La Habana. Agenda por WhatsApp.",
+    images: ["/og-logo.png"],
+  },
 };
 
 export const viewport: Viewport = {

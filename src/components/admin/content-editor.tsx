@@ -1089,7 +1089,7 @@ export function ContentEditor() {
                                       >
                                         <div className="grid min-w-0 gap-4 lg:grid-cols-[14rem_minmax(0,1fr)]">
                                           <div className="min-w-0 space-y-3">
-                                            <div className="relative aspect-[4/5] min-w-0 overflow-hidden rounded-[1.1rem] bg-[var(--surface-muted)]">
+                                            <div className="relative aspect-video min-w-0 overflow-hidden rounded-[1.1rem] bg-[var(--surface-muted)]">
                                               {item.publicUrl ? (
                                                 <Image
                                                   src={item.publicUrl}
@@ -1346,7 +1346,7 @@ export function ContentEditor() {
                 {featuredGalleryPreview.length ? (
                   featuredGalleryPreview.map((item) => (
                     <div key={item.id} className="overflow-hidden rounded-[1rem] bg-[var(--surface)] text-sm text-[var(--text)]">
-                      <div className="relative aspect-[4/5] bg-[var(--surface-muted)]">
+                      <div className="relative aspect-video bg-[var(--surface-muted)]">
                         {item.publicUrl ? (
                           <Image
                             src={item.publicUrl}
