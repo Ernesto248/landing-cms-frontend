@@ -1,4 +1,4 @@
-import { apiFetch } from "@/lib/api/http";
+import { apiFetch, ApiError } from "@/lib/api/http";
 import type {
   BusinessHourResponse,
   BusinessProfileResponse,
@@ -8,38 +8,44 @@ import type {
   TestimonialResponse,
 } from "@/lib/api/types";
 
+async function publicApiFetch<T>(path: string, fallback: T) {
+  try {
+    return await apiFetch<T>(path, {
+      cache: "no-store",
+    });
+  } catch (error) {
+    const detail =
+      error instanceof ApiError
+        ? `${error.status} ${error.message}`
+        : error instanceof Error
+          ? error.message
+          : "Unknown error";
+
+    console.warn(`[public-api] Falling back for ${path}: ${detail}`);
+    return fallback;
+  }
+}
+
 export function getPublicBusinessProfile() {
-  return apiFetch<BusinessProfileResponse>("/public/business-profile", {
-    cache: "no-store",
-  });
+  return publicApiFetch<BusinessProfileResponse | null>("/public/business-profile", null);
 }
 
 export function getPublicBusinessHours() {
-  return apiFetch<BusinessHourResponse[]>("/public/business-hours", {
-    cache: "no-store",
-  });
+  return publicApiFetch<BusinessHourResponse[]>("/public/business-hours", []);
 }
 
 export function getPublicServices() {
-  return apiFetch<ServiceResponse[]>("/public/services", {
-    cache: "no-store",
-  });
+  return publicApiFetch<ServiceResponse[]>("/public/services", []);
 }
 
 export function getPublicContent() {
-  return apiFetch<LandingContentResponse[]>("/public/content", {
-    cache: "no-store",
-  });
+  return publicApiFetch<LandingContentResponse[]>("/public/content", []);
 }
 
 export function getPublicTestimonials() {
-  return apiFetch<TestimonialResponse[]>("/public/testimonials", {
-    cache: "no-store",
-  });
+  return publicApiFetch<TestimonialResponse[]>("/public/testimonials", []);
 }
 
 export function getPublicGallery() {
-  return apiFetch<GalleryItemResponse[]>("/public/gallery", {
-    cache: "no-store",
-  });
+  return publicApiFetch<GalleryItemResponse[]>("/public/gallery", []);
 }
