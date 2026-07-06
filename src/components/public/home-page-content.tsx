@@ -9,7 +9,6 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { ChevronRight, Clock, MapPin, MessageCircle, Sparkles, X } from "lucide-react";
 
 import { AdminMobileSheet } from "@/components/admin/admin-mobile-sheet";
-import { GalleryCarousel } from "@/components/public/gallery-carousel";
 import { MobileDynamicIsland } from "@/components/public/mobile-dynamic-island";
 import { SiteFooter } from "@/components/public/site-footer";
 import { SiteHeader } from "@/components/public/site-header";
@@ -44,9 +43,7 @@ export function HomePageContent({ siteData }: Readonly<HomePageContentProps>) {
   const [activeGalleryCategory, setActiveGalleryCategory] = useState<string | null>(
     () => galleryCategories[0] ?? null,
   );
-  const [carouselImages, setCarouselImages] = useState<{ url: string; alt: string; title: string }[]>([]);
-  const [carouselStartIndex, setCarouselStartIndex] = useState(0);
-  const [showCarousel, setShowCarousel] = useState(false);
+  const [selectedGalleryServiceName, setSelectedGalleryServiceName] = useState<string | null>(null);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
 
   const galleryByService = useMemo(() => {
@@ -62,23 +59,7 @@ export function HomePageContent({ siteData }: Readonly<HomePageContentProps>) {
   }, [activeGalleryCategory, galleryByCategory]);
 
   const uniqueServiceNames = useMemo(() => Object.keys(galleryByService), [galleryByService]);
-  const spotlightGalleryItems = useMemo(
-    () => galleryItems.filter((item) => item.imageUrl).slice(0, 3),
-    [galleryItems],
-  );
-
-  function openCarousel(serviceName: string) {
-    const serviceImages = galleryByService[serviceName] ?? [];
-    setCarouselImages(
-      serviceImages.map((img) => ({
-        url: img.imageUrl!,
-        alt: img.serviceName,
-        title: img.title,
-      })),
-    );
-    setCarouselStartIndex(0);
-    setShowCarousel(true);
-  }
+  const selectedGalleryImages = selectedGalleryServiceName ? (galleryByService[selectedGalleryServiceName] ?? []) : [];
 
   const servicesByCategory = services.reduce<Record<string, typeof services>>((acc, service) => {
     const category = service.category || "Servicios";
@@ -117,16 +98,6 @@ export function HomePageContent({ siteData }: Readonly<HomePageContentProps>) {
           },
         });
 
-        gsap.to("[data-look-stack]", {
-          yPercent: -14,
-          ease: "none",
-          scrollTrigger: {
-            trigger: "[data-look-section]",
-            start: "top bottom",
-            end: "bottom top",
-            scrub: true,
-          },
-        });
       });
 
       gsap.utils.toArray<HTMLElement>("[data-section-reveal]").forEach((section) => {
@@ -288,73 +259,6 @@ export function HomePageContent({ siteData }: Readonly<HomePageContentProps>) {
           </div>
         </section>
 
-        <section
-          data-look-section
-          data-section-reveal
-          className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-12 sm:px-6 lg:grid-cols-[0.78fr_1.22fr] lg:px-8 lg:py-20"
-        >
-          <div className="flex flex-col justify-between gap-8">
-            <div className="space-y-4">
-              <p data-reveal-item className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
-                Estudio de mirada
-              </p>
-              <h2 data-reveal-item className="max-w-xl text-[2.45rem] font-semibold leading-[0.98] text-[var(--text)] sm:text-5xl">
-                Cada servicio empieza con una decision visual.
-              </h2>
-              <p data-reveal-item className="max-w-lg text-[1.02rem] leading-8 text-[var(--text-muted)]">
-                No se trata solo de reservar. Primero miras el acabado, eliges intensidad y luego coordinamos por WhatsApp.
-              </p>
-            </div>
-            <div data-reveal-item className="grid grid-cols-2 gap-3 text-sm">
-              <div className="border-t border-[var(--border)] pt-4">
-                <p className="font-semibold text-[var(--text)]">Studio</p>
-                <p className="mt-1 leading-6 text-[var(--text-muted)]">{content.address}</p>
-              </div>
-              <div className="border-t border-[var(--border)] pt-4">
-                <p className="font-semibold text-[var(--text)]">Home</p>
-                <p className="mt-1 leading-6 text-[var(--text-muted)]">Fee variable segun traslado.</p>
-              </div>
-            </div>
-          </div>
-
-          <div data-look-stack className="grid min-h-[28rem] grid-cols-5 grid-rows-6 gap-3 will-change-transform">
-            {spotlightGalleryItems.length > 0 ? (
-              spotlightGalleryItems.map((item, index) => (
-                <div
-                  key={item.id}
-                  data-reveal-item
-                  data-image-reveal
-                  className={`relative overflow-hidden rounded-[1.75rem] bg-[var(--surface-muted)] ${
-                    index === 0
-                      ? "col-span-3 row-span-4"
-                      : index === 1
-                        ? "col-span-2 row-span-3"
-                        : "col-span-3 row-span-2"
-                  }`}
-                >
-                  <Image
-                    src={item.imageUrl!}
-                    alt={item.serviceName}
-                    fill
-                    className="object-cover"
-                    sizes="(max-width: 1024px) 60vw, 34vw"
-                  />
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-4">
-                    <p className="text-sm font-semibold text-white">{item.title}</p>
-                    <p className="mt-1 text-xs text-white/75">{item.serviceName}</p>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <>
-                <div data-reveal-item className="col-span-3 row-span-4 rounded-[1.75rem] bg-[linear-gradient(135deg,#211922,#7d2840)]" />
-                <div data-reveal-item className="col-span-2 row-span-3 rounded-[1.75rem] bg-[var(--surface-muted)]" />
-                <div data-reveal-item className="col-span-3 row-span-2 rounded-[1.75rem] bg-[var(--danger-bg)]" />
-              </>
-            )}
-          </div>
-        </section>
-
         <section id="galeria" data-section-reveal className="mx-auto w-full max-w-6xl space-y-6 px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
           <div className="grid gap-5 lg:grid-cols-[0.72fr_1fr] lg:items-end">
             <div className="space-y-3">
@@ -388,7 +292,7 @@ export function HomePageContent({ siteData }: Readonly<HomePageContentProps>) {
               </div>
 
               {uniqueServiceNames.length > 0 ? (
-                <div data-gallery-grid className="grid auto-rows-[12rem] grid-cols-2 gap-3 sm:grid-cols-3 sm:auto-rows-[13rem] lg:grid-cols-4 lg:auto-rows-[14rem]">
+                <div data-gallery-grid className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {uniqueServiceNames.map((serviceName) => {
                     const coverImage = galleryByService[serviceName]?.[0];
                     if (!coverImage?.imageUrl) return null;
@@ -399,11 +303,9 @@ export function HomePageContent({ siteData }: Readonly<HomePageContentProps>) {
                         key={serviceName}
                         data-gallery-card
                         data-image-reveal
-                        className={`group relative flex overflow-hidden rounded-[1.5rem] bg-[var(--surface-muted)] transition hover:scale-[1.02] ${
-                          imageCount > 1 ? "row-span-2" : ""
-                        }`}
+                        className="group relative aspect-video min-w-0 overflow-hidden rounded-[1.35rem] bg-[var(--surface-muted)] transition hover:scale-[1.01] sm:rounded-[1.5rem]"
                         type="button"
-                        onClick={() => openCarousel(serviceName)}
+                        onClick={() => setSelectedGalleryServiceName(serviceName)}
                       >
                         <Image
                           src={coverImage.imageUrl}
@@ -577,20 +479,45 @@ export function HomePageContent({ siteData }: Readonly<HomePageContentProps>) {
         </section>
       </main>
 
-      <AdminMobileSheet open={showCarousel} onClose={() => setShowCarousel(false)}>
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-[var(--text)]">Galeria</p>
+      <AdminMobileSheet open={selectedGalleryServiceName !== null} onClose={() => setSelectedGalleryServiceName(null)}>
+        <div className="flex h-full min-h-0 flex-col">
+          <div className="flex shrink-0 items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--accent)]">Galeria</p>
+              <p className="mt-1 truncate text-base font-semibold text-[var(--text)]">
+                {selectedGalleryServiceName}
+              </p>
+            </div>
             <button
               aria-label="Cerrar galeria"
-              className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--surface-muted)] text-[var(--text-muted)] transition hover:bg-[var(--secondary-btn)]"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[var(--surface-muted)] text-[var(--text-muted)] transition hover:bg-[var(--secondary-btn)]"
               type="button"
-              onClick={() => setShowCarousel(false)}
+              onClick={() => setSelectedGalleryServiceName(null)}
             >
               <X className="h-4 w-4" />
             </button>
           </div>
-          <GalleryCarousel images={carouselImages} startIndex={carouselStartIndex} />
+          <div className="mt-4 min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
+            {selectedGalleryImages.map((image) => (
+              <figure key={image.id} className="overflow-hidden rounded-[1.35rem] bg-[var(--surface-muted)]">
+                <div className="relative aspect-video bg-[var(--surface-inverse)]">
+                  {image.imageUrl ? (
+                    <Image
+                      src={image.imageUrl}
+                      alt={image.title}
+                      fill
+                      className="object-contain"
+                      sizes="(max-width: 640px) 100vw, 520px"
+                    />
+                  ) : null}
+                </div>
+                <figcaption className="p-3">
+                  <p className="text-sm font-semibold text-[var(--text)]">{image.title}</p>
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">{image.serviceName}</p>
+                </figcaption>
+              </figure>
+            ))}
+          </div>
         </div>
       </AdminMobileSheet>
 
@@ -683,7 +610,7 @@ export function HomePageContent({ siteData }: Readonly<HomePageContentProps>) {
       </AdminMobileSheet>
 
       <SiteFooter siteData={siteData} />
-      {!showCarousel && selectedService === null ? (
+      {selectedGalleryServiceName === null && selectedService === null ? (
         <MobileDynamicIsland
           message={content.whatsappMessage}
           phoneNumber={businessProfile.phoneWhatsapp}

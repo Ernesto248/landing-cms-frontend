@@ -212,6 +212,8 @@ export function ContentEditor() {
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
   const [services, setServices] = useState<ServiceResponse[]>([]);
   const [pendingGalleryServiceId, setPendingGalleryServiceId] = useState<string>("");
+  const [openGalleryServiceId, setOpenGalleryServiceId] = useState<string | null>(null);
+  const [activeGalleryServiceIds, setActiveGalleryServiceIds] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const heroFileInputRef = useRef<HTMLInputElement | null>(null);
   const [editorState, setEditorState] = useState<EditorState>({
@@ -284,10 +286,67 @@ export function ContentEditor() {
   const content = editorState.content;
 
   const featuredGalleryPreview = useMemo(() => editorState.galleryItems.slice(0, 4), [editorState.galleryItems]);
+  const galleryServiceGroups = useMemo(() => {
+    const groupsById = new Map<
+      string,
+      {
+        id: string;
+        name: string;
+        category: string;
+        isLegacy: boolean;
+        items: { item: EditableGalleryItem; index: number }[];
+      }
+    >();
+
+    for (const service of services) {
+      groupsById.set(service.id, {
+        id: service.id,
+        name: service.name,
+        category: service.category,
+        isLegacy: false,
+        items: [],
+      });
+    }
+
+    editorState.galleryItems.forEach((item, index) => {
+      if (item.serviceId && groupsById.has(item.serviceId)) {
+        groupsById.get(item.serviceId)!.items.push({ item, index });
+        return;
+      }
+
+      const legacyId = `legacy:${item.serviceName || "Sin servicio"}`;
+      if (!groupsById.has(legacyId)) {
+        groupsById.set(legacyId, {
+          id: legacyId,
+          name: item.serviceName || "Sin servicio",
+          category: "Sin servicio asignado",
+          isLegacy: true,
+          items: [],
+        });
+      }
+      groupsById.get(legacyId)!.items.push({ item, index });
+    });
+
+    return Array.from(groupsById.values())
+      .filter((group) => group.items.length > 0 || (!group.isLegacy && activeGalleryServiceIds.includes(group.id)))
+      .sort((left, right) => {
+        if (left.isLegacy !== right.isLegacy) return left.isLegacy ? 1 : -1;
+        return `${left.category}${left.name}`.localeCompare(`${right.category}${right.name}`);
+      });
+  }, [activeGalleryServiceIds, editorState.galleryItems, services]);
 
   const logisticsSchedulePreview = useMemo(() => {
     return content.schedule || fallbackBusinessHours.map((entry) => `${entry.day}: ${entry.hours}`).join(" · ");
   }, [content.schedule]);
+
+  const gallerySectionServiceIds = useMemo(
+    () => new Set(galleryServiceGroups.filter((group) => !group.isLegacy).map((group) => group.id)),
+    [galleryServiceGroups],
+  );
+  const availableGallerySectionServices = useMemo(
+    () => services.filter((service) => !gallerySectionServiceIds.has(service.id)),
+    [gallerySectionServiceIds, services],
+  );
 
   function markSaved() {
     setSaveState("saved");
@@ -356,17 +415,30 @@ export function ContentEditor() {
     setSaveState("idle");
   }
 
-  function openGalleryPicker(index: number | null) {
+  function openGalleryPicker(index: number | null, serviceId?: string | null) {
     if (!fileInputRef.current) {
       return;
     }
 
     fileInputRef.current.dataset.index = index === null ? "new" : String(index);
+    fileInputRef.current.dataset.serviceId = serviceId ?? "";
+    if (serviceId) {
+      setPendingGalleryServiceId(serviceId);
+    }
     fileInputRef.current.click();
   }
 
   function openHeroPicker() {
     heroFileInputRef.current?.click();
+  }
+
+  function addGallerySection() {
+    if (!pendingGalleryServiceId) return;
+    setActiveGalleryServiceIds((current) =>
+      current.includes(pendingGalleryServiceId) ? current : [...current, pendingGalleryServiceId],
+    );
+    setOpenGalleryServiceId(pendingGalleryServiceId);
+    setPendingGalleryServiceId("");
   }
 
   async function uploadHeroImage(file: File) {
@@ -416,7 +488,7 @@ export function ContentEditor() {
     }
   }
 
-  async function uploadGalleryImage(index: number, file: File) {
+  async function uploadGalleryImage(index: number, file: File, serviceIdOverride?: string | null) {
     if (!accessToken) {
       return;
     }
@@ -441,7 +513,7 @@ export function ContentEditor() {
       formData.append("sortOrder", String(index));
       formData.append("altText", editorState.galleryItems[index]?.serviceName ?? "Galeria");
       formData.append("caption", editorState.galleryItems[index]?.title ?? "Sin titulo");
-      const sid = editorState.galleryItems[index]?.serviceId ?? pendingGalleryServiceId;
+      const sid = editorState.galleryItems[index]?.serviceId ?? serviceIdOverride ?? pendingGalleryServiceId;
       if (sid) formData.append("serviceId", sid);
 
       const uploaded = await uploadAdminGalleryImage(sessionAccessToken, formData);
@@ -522,6 +594,56 @@ export function ContentEditor() {
         setErrorMessage(error.message);
       } else {
         setErrorMessage("No se pudo eliminar la imagen.");
+      }
+    }
+  }
+
+  async function removeGallerySection(group: (typeof galleryServiceGroups)[number]) {
+    const confirmed = window.confirm(
+      group.items.length
+        ? `Eliminar la seccion "${group.name}" y sus ${group.items.length} imagen${group.items.length === 1 ? "" : "es"}?`
+        : `Eliminar la seccion "${group.name}"?`,
+    );
+    if (!confirmed) return;
+
+    const itemIds = new Set(group.items.map(({ item }) => item.id));
+
+    if (!accessToken || group.items.length === 0) {
+      setEditorState((current) => {
+        const nextItems = current.galleryItems.filter((item) => !itemIds.has(item.id));
+        return {
+          ...current,
+          galleryItems: nextItems,
+          content: { ...current.content, galleryItems: mapGalleryContentItems(nextItems) },
+        };
+      });
+      setActiveGalleryServiceIds((current) => current.filter((serviceId) => serviceId !== group.id));
+      setOpenGalleryServiceId(null);
+      setSaveState(group.items.length ? "idle" : "saved");
+      return;
+    }
+
+    const sessionAccessToken = accessToken;
+    setErrorMessage("");
+
+    try {
+      await Promise.all(group.items.map(({ item }) => deleteAdminGalleryItem(sessionAccessToken, item.id)));
+      setEditorState((current) => {
+        const nextItems = current.galleryItems.filter((item) => !itemIds.has(item.id));
+        return {
+          ...current,
+          galleryItems: nextItems,
+          content: { ...current.content, galleryItems: mapGalleryContentItems(nextItems) },
+        };
+      });
+      setActiveGalleryServiceIds((current) => current.filter((serviceId) => serviceId !== group.id));
+      setOpenGalleryServiceId(null);
+      setSaveState("saved");
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setErrorMessage(error.message);
+      } else {
+        setErrorMessage("No se pudo eliminar la seccion de galeria.");
       }
     }
   }
@@ -856,10 +978,12 @@ export function ContentEditor() {
                         onChange={(event) => {
                           const file = event.target.files?.[0];
                           const indexValue = event.target.dataset.index ?? "new";
+                          const serviceId = event.target.dataset.serviceId || pendingGalleryServiceId;
                           const index = indexValue === "new" ? editorState.galleryItems.length : Number(indexValue);
                           if (file) {
-                            void uploadGalleryImage(index, file);
+                            void uploadGalleryImage(index, file, serviceId);
                           }
+                          event.target.dataset.serviceId = "";
                           event.target.value = "";
                         }}
                       />
@@ -874,169 +998,224 @@ export function ContentEditor() {
                               : "Aun no hay imagenes en la galeria publica."}
                             </p>
                           </div>
-                          <div className="grid min-w-0 gap-2 sm:w-auto sm:grid-cols-[minmax(12rem,1fr)_auto] sm:items-center">
-                            <select
-                              className="h-10 min-w-0 rounded-xl border border-[var(--border-input)] bg-[var(--surface)] px-3 text-sm"
-                              value={pendingGalleryServiceId}
-                              onChange={(e) => setPendingGalleryServiceId(e.target.value)}
-                            >
-                              <option value="">Servicio...</option>
-                              {services.map((s) => (
-                                <option key={s.id} value={s.id}>
-                                  {s.category} - {s.name}
-                                </option>
-                              ))}
-                            </select>
-                            <button
-                              className="inline-flex h-10 shrink-0 items-center justify-center rounded-2xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-                              type="button"
-                              onClick={() => openGalleryPicker(null)}
-                              disabled={uploadingIndex !== null || !pendingGalleryServiceId}
-                            >
-                              {uploadingIndex === editorState.galleryItems.length ? "Subiendo..." : "Agregar imagen"}
-                            </button>
-                          </div>
+                          <p className="rounded-full bg-[var(--surface)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
+                            Edita por servicio
+                          </p>
+                        </div>
+                        <div className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                          <select
+                            className="h-10 min-w-0 rounded-xl border border-[var(--border-input)] bg-[var(--surface)] px-3 text-sm"
+                            value={pendingGalleryServiceId}
+                            onChange={(event) => setPendingGalleryServiceId(event.target.value)}
+                          >
+                            <option value="">Agregar seccion por servicio...</option>
+                            {availableGallerySectionServices.map((service) => (
+                              <option key={service.id} value={service.id}>
+                                {service.category} - {service.name}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            className="inline-flex h-10 items-center justify-center rounded-2xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                            type="button"
+                            onClick={addGallerySection}
+                            disabled={!pendingGalleryServiceId}
+                          >
+                            Agregar seccion
+                          </button>
                         </div>
                       </div>
 
-                      {editorState.galleryItems.length ? (
-                        <div className="min-w-0 space-y-4">
-                          {editorState.galleryItems.map((item, index) => (
-                            <div
-                              key={item.id}
-                              className="min-w-0 overflow-hidden rounded-[1.4rem] border border-[var(--border)] bg-[var(--surface-muted)] p-3 sm:p-4"
+                      <div className="min-w-0 space-y-3">
+                        {galleryServiceGroups.map((group) => {
+                          const groupOpen = openGalleryServiceId === group.id;
+                          const uploadTargetServiceId = group.isLegacy ? null : group.id;
+
+                          return (
+                            <section
+                              key={group.id}
+                              className="min-w-0 overflow-hidden rounded-[1.4rem] border border-[var(--border)] bg-[var(--surface-muted)]"
                             >
-                              <div className="grid min-w-0 gap-4 lg:grid-cols-[14rem_minmax(0,1fr)]">
-                                <div className="min-w-0 space-y-3">
-                                  <div className="relative aspect-[4/5] min-w-0 overflow-hidden rounded-[1.25rem] bg-[var(--surface)]">
-                                    {item.publicUrl ? (
-                                      <Image
-                                        src={item.publicUrl}
-                                        alt={item.title}
-                                        fill
-                                        className="object-cover"
-                                        sizes="(max-width: 1024px) 100vw, 224px"
-                                      />
-                                    ) : (
-                                      <div className="flex h-full items-center justify-center px-4 text-center text-sm text-[var(--text-muted)]">
-                                        Sin preview disponible
-                                      </div>
-                                    )}
-                                  </div>
+                              <button
+                                className="flex w-full flex-col gap-3 p-3 text-left sm:flex-row sm:items-center sm:justify-between sm:p-4"
+                                type="button"
+                                onClick={() => setOpenGalleryServiceId(groupOpen ? null : group.id)}
+                              >
+                                <span className="min-w-0">
+                                  <span className="block text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-subtle)]">
+                                    {group.category}
+                                  </span>
+                                  <span className="mt-1 block text-base font-semibold text-[var(--text)]">
+                                    {group.name}
+                                  </span>
+                                </span>
+                                <span className="flex items-center gap-2">
+                                  <span className="rounded-full bg-[var(--surface)] px-3 py-1 text-xs font-semibold text-[var(--text-muted)]">
+                                    {group.items.length} imagen{group.items.length === 1 ? "" : "es"}
+                                  </span>
+                                  <span className="rounded-full bg-[var(--surface)] px-3 py-1 text-xs font-semibold text-[var(--accent)]">
+                                    {groupOpen ? "Cerrar" : "Editar"}
+                                  </span>
+                                </span>
+                              </button>
 
-                                  <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-[0.12em]">
-                                    <span className="rounded-full bg-[var(--surface)] px-3 py-1 text-[var(--success)]">
-                                      Subida a Spaces
-                                    </span>
-                                    <span className="rounded-full bg-[var(--surface)] px-3 py-1 text-[var(--text-muted)]">
-                                      {item.isActive ? "Visible" : "Oculta"}
-                                    </span>
-                                  </div>
-
+                              {groupOpen ? (
+                                <div className="space-y-3 border-t border-[var(--border)] p-3 sm:p-4">
                                   <div className="grid gap-2 sm:flex sm:flex-wrap">
+                                  {!group.isLegacy ? (
                                     <button
-                                      className="inline-flex h-9 min-w-0 items-center justify-center rounded-xl bg-[var(--surface)] px-3 text-xs font-semibold text-[var(--text)] sm:px-4"
+                                      className="inline-flex h-10 w-full items-center justify-center rounded-2xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                                       type="button"
-                                      onClick={() => openGalleryPicker(index)}
+                                      onClick={() => openGalleryPicker(null, uploadTargetServiceId)}
                                       disabled={uploadingIndex !== null}
                                     >
-                                      {uploadingIndex === index ? "Subiendo..." : "Reemplazar imagen"}
+                                      {uploadingIndex === editorState.galleryItems.length ? "Subiendo..." : "Agregar imagen a este servicio"}
                                     </button>
-                                    {item.publicUrl ? (
-                                      <a
-                                        className="inline-flex h-9 min-w-0 items-center justify-center rounded-xl border border-[var(--border)] px-3 text-xs font-semibold text-[var(--text)] sm:px-4"
-                                        href={item.publicUrl}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                      >
-                                        Abrir imagen
-                                      </a>
-                                    ) : null}
+                                  ) : null}
+                                    <button
+                                      className="inline-flex h-10 w-full items-center justify-center rounded-2xl bg-[var(--danger-bg)] px-4 text-sm font-semibold text-[var(--danger)] transition hover:opacity-85 sm:w-auto"
+                                      type="button"
+                                      onClick={() => void removeGallerySection(group)}
+                                    >
+                                      Eliminar seccion
+                                    </button>
                                   </div>
-                                </div>
 
-                                <div className="min-w-0">
-                                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                    <div className="min-w-0">
-                                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-subtle)]">
-                                        Item {index + 1}
-                                      </p>
-                                      <p className="mt-1 text-sm text-[var(--text-muted)]">
-                                        Este item ya esta listo para mostrarse en la landing publica.
+                                  {group.items.length ? (
+                                    group.items.map(({ item, index }) => (
+                                      <div
+                                        key={item.id}
+                                        className="min-w-0 overflow-hidden rounded-[1.2rem] bg-[var(--surface)] p-3 sm:p-4"
+                                      >
+                                        <div className="grid min-w-0 gap-4 lg:grid-cols-[14rem_minmax(0,1fr)]">
+                                          <div className="min-w-0 space-y-3">
+                                            <div className="relative aspect-[4/5] min-w-0 overflow-hidden rounded-[1.1rem] bg-[var(--surface-muted)]">
+                                              {item.publicUrl ? (
+                                                <Image
+                                                  src={item.publicUrl}
+                                                  alt={item.title}
+                                                  fill
+                                                  className="object-cover"
+                                                  sizes="(max-width: 1024px) 100vw, 224px"
+                                                />
+                                              ) : (
+                                                <div className="flex h-full items-center justify-center px-4 text-center text-sm text-[var(--text-muted)]">
+                                                  Sin preview disponible
+                                                </div>
+                                              )}
+                                            </div>
+
+                                            <div className="flex flex-wrap gap-2 text-[11px] font-semibold uppercase tracking-[0.12em]">
+                                              <span className="rounded-full bg-[var(--surface-muted)] px-3 py-1 text-[var(--success)]">
+                                                Subida a Spaces
+                                              </span>
+                                              <span className="rounded-full bg-[var(--surface-muted)] px-3 py-1 text-[var(--text-muted)]">
+                                                {item.isActive ? "Visible" : "Oculta"}
+                                              </span>
+                                            </div>
+
+                                            <div className="grid gap-2 sm:flex sm:flex-wrap">
+                                              <button
+                                                className="inline-flex h-9 min-w-0 items-center justify-center rounded-xl bg-[var(--surface-muted)] px-3 text-xs font-semibold text-[var(--text)] sm:px-4"
+                                                type="button"
+                                                onClick={() => openGalleryPicker(index, item.serviceId)}
+                                                disabled={uploadingIndex !== null}
+                                              >
+                                                {uploadingIndex === index ? "Subiendo..." : "Reemplazar imagen"}
+                                              </button>
+                                              {item.publicUrl ? (
+                                                <a
+                                                  className="inline-flex h-9 min-w-0 items-center justify-center rounded-xl border border-[var(--border)] px-3 text-xs font-semibold text-[var(--text)] sm:px-4"
+                                                  href={item.publicUrl}
+                                                  target="_blank"
+                                                  rel="noreferrer"
+                                                >
+                                                  Abrir imagen
+                                                </a>
+                                              ) : null}
+                                            </div>
+                                          </div>
+
+                                          <div className="min-w-0">
+                                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                              <div className="min-w-0">
+                                                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-subtle)]">
+                                                  Item {index + 1}
+                                                </p>
+                                                <p className="mt-1 text-sm text-[var(--text-muted)]">
+                                                  Este item ya esta listo para mostrarse en la landing publica.
+                                                </p>
+                                              </div>
+                                              <button
+                                                className="inline-flex h-9 w-full items-center justify-center rounded-xl bg-[var(--danger-bg)] px-4 text-xs font-semibold text-[var(--danger)] sm:w-auto"
+                                                type="button"
+                                                onClick={() => void removeGalleryItem(item.id, index)}
+                                              >
+                                                Eliminar
+                                              </button>
+                                            </div>
+
+                                            <label className="mt-4 block text-sm font-medium text-[var(--text)]">
+                                              Titulo
+                                              <input
+                                                className="mt-2 h-12 min-w-0 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4"
+                                                value={item.title}
+                                                onChange={(event) => updateGalleryItem(index, "title", event.target.value)}
+                                              />
+                                            </label>
+                                            <label className="mt-3 block text-sm font-medium text-[var(--text)]">
+                                              Servicio relacionado
+                                              <select
+                                                className="mt-2 h-12 min-w-0 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
+                                                value={item.serviceId ?? ""}
+                                                onChange={(event) => {
+                                                  const sid = event.target.value || null;
+                                                  const svc = services.find((s) => s.id === sid);
+                                                  setEditorState((current) => ({
+                                                    ...current,
+                                                    galleryItems: current.galleryItems.map((gi, i) =>
+                                                      i === index
+                                                        ? { ...gi, serviceId: sid, serviceName: svc?.name ?? "" }
+                                                        : gi,
+                                                    ),
+                                                  }));
+                                                  setSaveState("idle");
+                                                }}
+                                              >
+                                                <option value="">Seleccionar servicio</option>
+                                                {services.map((s) => (
+                                                  <option key={s.id} value={s.id}>
+                                                    {s.category} - {s.name}
+                                                  </option>
+                                                ))}
+                                              </select>
+                                            </label>
+                                            <label className="mt-3 block text-sm font-medium text-[var(--text)]">
+                                              Descripcion
+                                              <textarea
+                                                className="mt-2 min-h-24 min-w-0 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 py-3"
+                                                value={item.description}
+                                                onChange={(event) => updateGalleryItem(index, "description", event.target.value)}
+                                              />
+                                            </label>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))
+                                  ) : (
+                                    <div className="rounded-[1.2rem] border border-dashed border-[var(--border)] bg-[var(--surface)] p-5 text-center">
+                                      <p className="text-sm font-semibold text-[var(--text)]">Sin imagenes en este servicio</p>
+                                      <p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">
+                                        Agrega imagenes aqui para mantener la galeria ordenada por servicio.
                                       </p>
                                     </div>
-                                    <button
-                                      className="inline-flex h-9 w-full items-center justify-center rounded-xl bg-[var(--danger-bg)] px-4 text-xs font-semibold text-[var(--danger)] sm:w-auto"
-                                      type="button"
-                                      onClick={() => void removeGalleryItem(item.id, index)}
-                                    >
-                                      Eliminar
-                                    </button>
-                                  </div>
-
-                                  <label className="mt-4 block text-sm font-medium text-[var(--text)]">
-                                    Titulo
-                                    <input
-                                      className="mt-2 h-12 min-w-0 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4"
-                                      value={item.title}
-                                      onChange={(event) => updateGalleryItem(index, "title", event.target.value)}
-                                    />
-                                  </label>
-                                  <label className="mt-3 block text-sm font-medium text-[var(--text)]">
-                                    Servicio relacionado
-                                    <select
-                                      className="mt-2 h-12 min-w-0 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
-                                      value={item.serviceId ?? ""}
-                                      onChange={(event) => {
-                                        const sid = event.target.value || null;
-                                        const svc = services.find((s) => s.id === sid);
-                                        setEditorState((current) => ({
-                                          ...current,
-                                          galleryItems: current.galleryItems.map((gi, i) =>
-                                            i === index
-                                              ? { ...gi, serviceId: sid, serviceName: svc?.name ?? "" }
-                                              : gi,
-                                          ),
-                                        }));
-                                      }}
-                                    >
-                                      <option value="">Seleccionar servicio</option>
-                                      {services.map((s) => (
-                                        <option key={s.id} value={s.id}>
-                                          {s.category} - {s.name}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </label>
-                                  <label className="mt-3 block text-sm font-medium text-[var(--text)]">
-                                    Descripcion
-                                    <textarea
-                                      className="mt-2 min-h-24 min-w-0 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 py-3"
-                                      value={item.description}
-                                      onChange={(event) => updateGalleryItem(index, "description", event.target.value)}
-                                    />
-                                  </label>
+                                  )}
                                 </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="rounded-[1.5rem] border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-6 text-center">
-                          <p className="text-base font-semibold text-[var(--text)]">Tu galeria esta vacia</p>
-                          <p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">
-                            Sube la primera imagen para ver el preview aqui y luego comprobarla en la landing.
-                          </p>
-                          <button
-                            className="mt-4 inline-flex h-11 items-center justify-center rounded-2xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-hover)] disabled:cursor-wait disabled:opacity-70"
-                            type="button"
-                            onClick={() => openGalleryPicker(null)}
-                            disabled={uploadingIndex !== null}
-                          >
-                            {uploadingIndex === 0 ? "Subiendo..." : "Subir primera imagen"}
-                          </button>
-                        </div>
-                      )}
+                              ) : null}
+                            </section>
+                          );
+                        })}
+                      </div>
                     </>
                   ) : null}
 
