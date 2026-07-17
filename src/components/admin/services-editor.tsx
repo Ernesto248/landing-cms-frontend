@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Loader2, Pencil, Plus, Trash2, X } from "lucide-react";
 
 import { AdminMobileSheet } from "@/components/admin/admin-mobile-sheet";
+import { BusinessEditor } from "@/components/admin/business-editor";
 import { useAdminSession } from "@/components/admin/admin-session-provider";
 import {
   createAdminService,
@@ -820,6 +821,10 @@ export function ServicesEditor() {
           </article>
         </section>
       </main>
+
+      <div className="mt-5">
+        <BusinessEditor embedded />
+      </div>
 
       <AdminMobileSheet
         open={showMobileForm}

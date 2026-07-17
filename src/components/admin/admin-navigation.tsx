@@ -7,7 +7,7 @@ import {
   FileText,
   LayoutDashboard,
   Scissors,
-  Clock,
+  Users,
   Wallet,
 } from "lucide-react";
 
@@ -17,7 +17,7 @@ const navigation = [
   { href: "/admin/contenido", label: "Contenido", shortLabel: "CMS", icon: FileText },
   { href: "/admin/finanzas", label: "Finanzas", shortLabel: "Finanzas", icon: Wallet },
   { href: "/admin/servicios", label: "Servicios", shortLabel: "Servic.", icon: Scissors },
-  { href: "/admin/horarios", label: "Horarios", shortLabel: "Horario", icon: Clock },
+  { href: "/admin/clientas", label: "Clientas", shortLabel: "Clientas", icon: Users },
 ];
 
 function isActive(pathname: string, href: string) {

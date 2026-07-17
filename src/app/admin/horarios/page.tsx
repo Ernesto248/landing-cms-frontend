@@ -1,5 +1,5 @@
-import { BusinessEditor } from "@/components/admin/business-editor";
+import { redirect } from "next/navigation";
 
 export default function AdminBusinessPage() {
-  return <BusinessEditor />;
+  redirect("/admin/clientas");
 }

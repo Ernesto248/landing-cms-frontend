@@ -64,7 +64,7 @@ function addMonths(isoDate: string, amount: number) {
   return addMonthsToIsoDate(isoDate, amount);
 }
 
-export function BusinessEditor() {
+export function BusinessEditor({ embedded = false }: { embedded?: boolean } = {}) {
   const { accessToken, refresh, status } = useAdminSession();
 
   // Business hours
@@ -248,8 +248,8 @@ export function BusinessEditor() {
     );
   }
 
-  return (
-    <main className="grid gap-5 lg:grid-cols-[1fr_1fr]">
+  const content = (
+    <div className="grid gap-5 lg:grid-cols-[1fr_1fr]">
       {/* Business hours */}
       <section className="space-y-5">
         <article className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5">
@@ -512,6 +512,27 @@ export function BusinessEditor() {
           </div>
         </article>
       </section>
-    </main>
+    </div>
   );
+
+  if (embedded) {
+    return (
+      <section className="space-y-5">
+        <article className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5">
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
+            Horarios
+          </p>
+          <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[var(--text)]">
+            Horarios y bloqueos de agenda.
+          </h2>
+          <p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">
+            Configura la semana laboral y los dias no disponibles.
+          </p>
+        </article>
+        {content}
+      </section>
+    );
+  }
+
+  return <main>{content}</main>;
 }
