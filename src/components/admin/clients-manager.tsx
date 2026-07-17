@@ -1,8 +1,9 @@
 "use client";
 
-import { Loader2, Pencil, Plus, Search, UserRound } from "lucide-react";
+import { Loader2, Pencil, Plus, Search, UserRound, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import { AdminMobileSheet } from "@/components/admin/admin-mobile-sheet";
 import { useAdminSession } from "@/components/admin/admin-session-provider";
 import { createAdminClient, getAdminClients, updateAdminClient } from "@/lib/api/admin";
 import { ApiError } from "@/lib/api/http";
@@ -68,6 +69,8 @@ export function ClientsManager() {
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [showMobileForm, setShowMobileForm] = useState(false);
 
   const selectedClient = useMemo(
     () => clients.find((client) => client.id === selectedClientId) ?? null,
@@ -85,6 +88,17 @@ export function ClientsManager() {
       return `${client.fullName} ${phone} ${client.notes ?? ""}`.toLowerCase().includes(query);
     });
   }, [clients, search]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 1023px)");
+    const syncViewport = (event?: MediaQueryListEvent) => {
+      setIsMobileViewport(event ? event.matches : mediaQuery.matches);
+    };
+
+    syncViewport();
+    mediaQuery.addEventListener("change", syncViewport);
+    return () => mediaQuery.removeEventListener("change", syncViewport);
+  }, []);
 
   useEffect(() => {
     if (!accessToken || status !== "authenticated") return;
@@ -118,11 +132,19 @@ export function ClientsManager() {
   function startNewClient() {
     setSelectedClientId(null);
     setDraft(emptyDraft);
+
+    if (isMobileViewport) {
+      setShowMobileForm(true);
+    }
   }
 
   function startEditing(client: ClientResponse) {
     setSelectedClientId(client.id);
     setDraft(toDraft(client));
+
+    if (isMobileViewport) {
+      setShowMobileForm(true);
+    }
   }
 
   async function saveClient() {
@@ -146,6 +168,7 @@ export function ClientsManager() {
       });
       setSelectedClientId(savedClient.id);
       setDraft(toDraft(savedClient));
+      setShowMobileForm(false);
       toast.success(selectedClientId ? "Clienta actualizada." : "Clienta creada.");
     } catch {
       toast.error(selectedClientId ? "No se pudo actualizar la clienta." : "No se pudo crear la clienta.");
@@ -153,6 +176,87 @@ export function ClientsManager() {
       setIsSubmitting(false);
     }
   }
+
+  const clientFormContent = (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 lg:hidden">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
+            {selectedClient ? "Editar clienta" : "Nueva clienta"}
+          </p>
+          <h3 className="mt-1 truncate text-lg font-semibold text-[var(--text)]">
+            {selectedClient?.fullName ?? "Datos basicos"}
+          </h3>
+        </div>
+        <button
+          aria-label="Cerrar formulario"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[var(--surface-muted)] text-[var(--text-muted)] transition hover:bg-[var(--secondary-btn)]"
+          type="button"
+          onClick={() => setShowMobileForm(false)}
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      <label className="block text-sm font-medium text-[var(--text)]">
+        Nombre
+        <input
+          className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
+          value={draft.fullName}
+          onChange={(event) => setDraft((current) => ({ ...current, fullName: event.target.value }))}
+          placeholder="Nombre de la clienta"
+        />
+      </label>
+
+      <label className="block text-sm font-medium text-[var(--text)]">
+        Numero
+        <input
+          className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
+          inputMode="tel"
+          value={draft.phone}
+          onChange={(event) => setDraft((current) => ({ ...current, phone: event.target.value }))}
+          placeholder="+53..."
+        />
+      </label>
+
+      <label className="block text-sm font-medium text-[var(--text)]">
+        Notas
+        <textarea
+          className="mt-2 min-h-36 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 py-3 text-sm"
+          value={draft.notes}
+          onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
+          placeholder="Preferencias, observaciones o alergias"
+        />
+      </label>
+
+      <div className="flex gap-2">
+        <button
+          className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-hover)] disabled:opacity-50"
+          type="button"
+          onClick={() => void saveClient()}
+          disabled={isSubmitting || !draft.fullName.trim()}
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Guardando...
+            </>
+          ) : selectedClientId ? (
+            "Guardar cambios"
+          ) : (
+            "Crear clienta"
+          )}
+        </button>
+        <button
+          className="inline-flex h-11 items-center justify-center rounded-2xl bg-[var(--secondary-btn)] px-4 text-sm font-semibold text-[var(--text)] transition hover:bg-[var(--secondary-btn-hover)]"
+          type="button"
+          onClick={startNewClient}
+        >
+          Limpiar
+        </button>
+      </div>
+    </div>
+  );
 
   if (status === "loading" || isLoading) {
     return (
@@ -163,6 +267,7 @@ export function ClientsManager() {
   }
 
   return (
+    <>
     <main className="min-w-0 grid gap-5 lg:grid-cols-[1fr_0.85fr]">
       <section className="min-w-0 space-y-5">
         <article className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5">
@@ -246,7 +351,7 @@ export function ClientsManager() {
         </article>
       </section>
 
-      <section className="min-w-0">
+      <section className="hidden min-w-0 lg:block">
         <article className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5 lg:sticky lg:top-6">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[var(--surface-muted)] text-[var(--accent)]">
@@ -262,67 +367,13 @@ export function ClientsManager() {
             </div>
           </div>
 
-          <div className="mt-5 space-y-4">
-            <label className="block text-sm font-medium text-[var(--text)]">
-              Nombre
-              <input
-                className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
-                value={draft.fullName}
-                onChange={(event) => setDraft((current) => ({ ...current, fullName: event.target.value }))}
-                placeholder="Nombre de la clienta"
-              />
-            </label>
-
-            <label className="block text-sm font-medium text-[var(--text)]">
-              Numero
-              <input
-                className="mt-2 h-12 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
-                inputMode="tel"
-                value={draft.phone}
-                onChange={(event) => setDraft((current) => ({ ...current, phone: event.target.value }))}
-                placeholder="+53..."
-              />
-            </label>
-
-            <label className="block text-sm font-medium text-[var(--text)]">
-              Notas
-              <textarea
-                className="mt-2 min-h-36 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 py-3 text-sm"
-                value={draft.notes}
-                onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
-                placeholder="Preferencias, observaciones o alergias"
-              />
-            </label>
-
-            <div className="flex gap-2">
-              <button
-                className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl bg-[var(--accent)] px-4 text-sm font-semibold text-white transition hover:bg-[var(--accent-hover)] disabled:opacity-50"
-                type="button"
-                onClick={() => void saveClient()}
-                disabled={isSubmitting || !draft.fullName.trim()}
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Guardando...
-                  </>
-                ) : selectedClientId ? (
-                  "Guardar cambios"
-                ) : (
-                  "Crear clienta"
-                )}
-              </button>
-              <button
-                className="inline-flex h-11 items-center justify-center rounded-2xl bg-[var(--secondary-btn)] px-4 text-sm font-semibold text-[var(--text)] transition hover:bg-[var(--secondary-btn-hover)]"
-                type="button"
-                onClick={startNewClient}
-              >
-                Limpiar
-              </button>
-            </div>
-          </div>
+          <div className="mt-5">{clientFormContent}</div>
         </article>
       </section>
     </main>
+    <AdminMobileSheet open={showMobileForm} onClose={() => setShowMobileForm(false)}>
+      {clientFormContent}
+    </AdminMobileSheet>
+    </>
   );
 }
