@@ -590,33 +590,55 @@ export function FinanceDashboard() {
                 <Calendar className="h-4 w-4" />
                 Ingresos vs Gastos diarios
               </p>
-              <div className="mt-4 h-64">
+              <div className="mt-4 h-72 min-w-0 overflow-visible">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData}>
+                  <LineChart data={chartData} margin={{ top: 14, right: 12, bottom: 18, left: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                     <XAxis
                       dataKey="label"
+                      interval="preserveStartEnd"
+                      minTickGap={16}
                       tick={{ fontSize: 11, fill: "var(--text-subtle)" }}
                       tickLine={false}
                       axisLine={false}
+                      tickMargin={10}
                     />
                     <YAxis
+                      width={42}
+                      domain={[0, "dataMax"]}
                       tick={{ fontSize: 11, fill: "var(--text-subtle)" }}
                       tickLine={false}
                       axisLine={false}
+                      tickMargin={8}
                       tickFormatter={(value: number) => `${value >= 1000 ? `${(value / 1000).toFixed(0)}k` : value}`}
                     />
                     <Tooltip
+                      cursor={{ stroke: "var(--text-subtle)", strokeWidth: 1 }}
                       contentStyle={{
                         background: "var(--surface)",
                         border: "1px solid var(--border)",
                         borderRadius: "1rem",
                         fontSize: "12px",
+                        boxShadow: "0 18px 40px rgba(15, 23, 42, 0.12)",
                       }}
-                      formatter={(value) => [`${Math.abs(Number(value ?? 0)).toFixed(0)} CUP`, ""]}
+                      formatter={(value, name) => [formatCurrency(Number(value ?? 0)), name]}
                     />
-                    <Line type="natural" dataKey="Ingresos" stroke={CHART_COLORS[0]} strokeWidth={2.5} dot={false} />
-                    <Line type="natural" dataKey="Gastos" stroke={CHART_COLORS[1]} strokeWidth={2.5} dot={false} />
+                    <Line
+                      type="monotone"
+                      dataKey="Ingresos"
+                      stroke={CHART_COLORS[0]}
+                      strokeWidth={2.5}
+                      dot={false}
+                      activeDot={{ r: 4, strokeWidth: 2 }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="Gastos"
+                      stroke={CHART_COLORS[1]}
+                      strokeWidth={2.5}
+                      dot={false}
+                      activeDot={{ r: 4, strokeWidth: 2 }}
+                    />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
