@@ -31,6 +31,10 @@ function buildApiUrl(path: string) {
     return path;
   }
 
+  if (path.startsWith("/api/")) {
+    return path;
+  }
+
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   return `${getApiBaseUrl()}${normalizedPath}`;
 }

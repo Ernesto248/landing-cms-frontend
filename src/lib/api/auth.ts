@@ -2,7 +2,7 @@ import { apiFetch } from "@/lib/api/http";
 import type { AuthResponse, AuthUser, LoginRequest } from "@/lib/api/types";
 
 export function loginAdmin(credentials: LoginRequest) {
-  return apiFetch<AuthResponse>("/auth/login", {
+  return apiFetch<AuthResponse>("/api/admin-auth/login", {
     method: "POST",
     body: credentials,
     credentials: "include",
@@ -11,7 +11,7 @@ export function loginAdmin(credentials: LoginRequest) {
 }
 
 export function refreshAdminSession() {
-  return apiFetch<AuthResponse>("/auth/refresh", {
+  return apiFetch<AuthResponse>("/api/admin-auth/refresh", {
     method: "POST",
     credentials: "include",
     cache: "no-store",
@@ -19,7 +19,7 @@ export function refreshAdminSession() {
 }
 
 export function logoutAdmin() {
-  return apiFetch<{ message: string }>("/auth/logout", {
+  return apiFetch<{ message: string }>("/api/admin-auth/logout", {
     method: "POST",
     credentials: "include",
     cache: "no-store",
