@@ -1,13 +1,29 @@
 "use client";
 
-import { Loader2, Pencil, Plus, Search, UserRound, X } from "lucide-react";
+import {
+  CalendarDays,
+  Clock3,
+  History,
+  Loader2,
+  Pencil,
+  Plus,
+  Search,
+  UserRound,
+  X,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { AdminMobileSheet } from "@/components/admin/admin-mobile-sheet";
 import { useAdminSession } from "@/components/admin/admin-session-provider";
-import { createAdminClient, getAdminClients, updateAdminClient } from "@/lib/api/admin";
+import {
+  createAdminClient,
+  getAdminClients,
+  getAdminClientServiceHistory,
+  updateAdminClient,
+} from "@/lib/api/admin";
 import { ApiError } from "@/lib/api/http";
-import type { ClientResponse, UpsertClientRequest } from "@/lib/api/types";
+import type { AppointmentResponse, ClientResponse, UpsertClientRequest } from "@/lib/api/types";
+import { getHavanaTime } from "@/lib/havana-time";
 import { toast } from "@/lib/toast";
 
 type ClientDraft = {
@@ -21,6 +37,27 @@ const emptyDraft: ClientDraft = {
   phone: "",
   notes: "",
 };
+
+const serviceDateFormatter = new Intl.DateTimeFormat("es-CU", {
+  timeZone: "America/Havana",
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+});
+
+function formatServiceDate(value: string) {
+  return serviceDateFormatter.format(new Date(value));
+}
+
+function formatCurrency(value: number) {
+  return `${value.toFixed(0)} CUP`;
+}
+
+function formatHistorySummary(history: AppointmentResponse[]) {
+  const appointments = history.length;
+  const services = history.reduce((total, appointment) => total + appointment.items.length, 0);
+  return `${appointments} ${appointments === 1 ? "cita completada" : "citas completadas"} - ${services} ${services === 1 ? "servicio" : "servicios"}`;
+}
 
 async function withRefreshedToken<T>(
   accessToken: string,
@@ -71,6 +108,10 @@ export function ClientsManager() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [showMobileForm, setShowMobileForm] = useState(false);
+  const [serviceHistory, setServiceHistory] = useState<AppointmentResponse[]>([]);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyReloadKey, setHistoryReloadKey] = useState(0);
 
   const selectedClient = useMemo(
     () => clients.find((client) => client.id === selectedClientId) ?? null,
@@ -129,6 +170,39 @@ export function ClientsManager() {
     };
   }, [accessToken, refresh, status]);
 
+  useEffect(() => {
+    if (!accessToken || status !== "authenticated" || !selectedClientId) {
+      return;
+    }
+
+    const sessionAccessToken = accessToken;
+    const clientId = selectedClientId;
+    let isMounted = true;
+
+    async function loadServiceHistory() {
+      setServiceHistory([]);
+      setHistoryError(null);
+      setIsHistoryLoading(true);
+
+      try {
+        const history = await withRefreshedToken(sessionAccessToken, refresh, (token) =>
+          getAdminClientServiceHistory(token, clientId),
+        );
+        if (isMounted) setServiceHistory(history);
+      } catch {
+        if (isMounted) setHistoryError("No se pudo cargar el historial de servicios.");
+      } finally {
+        if (isMounted) setIsHistoryLoading(false);
+      }
+    }
+
+    void loadServiceHistory();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [accessToken, historyReloadKey, refresh, selectedClientId, status]);
+
   function startNewClient() {
     setSelectedClientId(null);
     setDraft(emptyDraft);
@@ -178,7 +252,7 @@ export function ClientsManager() {
   }
 
   const clientFormContent = (
-    <div className="space-y-4">
+    <div className="h-full space-y-4 overflow-y-auto pr-1">
       <div className="flex items-center justify-between gap-3 lg:hidden">
         <div className="min-w-0">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
@@ -255,6 +329,93 @@ export function ClientsManager() {
           Limpiar
         </button>
       </div>
+
+      {selectedClient ? (
+        <section className="border-t border-[var(--border)] pt-6">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-[var(--accent)]">
+                <History className="h-4 w-4 shrink-0" />
+                <h4 className="text-sm font-semibold uppercase tracking-[0.16em]">
+                  Historial de servicios
+                </h4>
+              </div>
+              {!isHistoryLoading && !historyError ? (
+                <p className="mt-2 text-sm text-[var(--text-muted)]">
+                  {serviceHistory.length
+                    ? formatHistorySummary(serviceHistory)
+                    : "Todavia no tiene servicios completados."}
+                </p>
+              ) : null}
+            </div>
+          </div>
+
+          {isHistoryLoading ? (
+            <div className="mt-5 flex items-center gap-2 py-5 text-sm text-[var(--text-muted)]">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Cargando historial...
+            </div>
+          ) : historyError ? (
+            <div className="mt-5 border-l-2 border-[var(--danger)] pl-4">
+              <p className="text-sm text-[var(--text-muted)]">{historyError}</p>
+              <button
+                className="mt-2 text-sm font-semibold text-[var(--accent)] hover:underline"
+                type="button"
+                onClick={() => setHistoryReloadKey((current) => current + 1)}
+              >
+                Reintentar
+              </button>
+            </div>
+          ) : serviceHistory.length ? (
+            <div className="mt-4 divide-y divide-[var(--border)]">
+              {serviceHistory.map((appointment) => (
+                <article className="py-4 first:pt-0 last:pb-0" key={appointment.id}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[var(--text-muted)]">
+                        <span className="inline-flex items-center gap-1.5 capitalize">
+                          <CalendarDays className="h-3.5 w-3.5" />
+                          {formatServiceDate(appointment.scheduledStart)}
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                          <Clock3 className="h-3.5 w-3.5" />
+                          {getHavanaTime(appointment.scheduledStart)}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--text-subtle)]">
+                        {appointment.appointmentMode === "HOME" ? "A domicilio" : "En estudio"}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-sm font-bold text-[var(--text)]">
+                      {formatCurrency(appointment.totalAmount)}
+                    </span>
+                  </div>
+
+                  <ul className="mt-3 space-y-2">
+                    {appointment.items.map((item) => (
+                      <li className="flex items-start justify-between gap-3 text-sm" key={item.id}>
+                        <span className="min-w-0 text-[var(--text)]">
+                          {item.serviceNameSnapshot}
+                          {item.isTouchUp ? (
+                            <span className="ml-2 text-xs font-semibold text-[var(--accent)]">Retoque</span>
+                          ) : null}
+                        </span>
+                        <span className="shrink-0 text-[var(--text-muted)]">
+                          {formatCurrency(item.finalPrice)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-5 py-4 text-sm leading-6 text-[var(--text-muted)]">
+              Los servicios apareceran aqui cuando una cita se marque como completada.
+            </div>
+          )}
+        </section>
+      ) : null}
     </div>
   );
 
@@ -352,7 +513,7 @@ export function ClientsManager() {
       </section>
 
       <section className="hidden min-w-0 lg:block">
-        <article className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5 lg:sticky lg:top-6">
+        <article className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-hidden">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[var(--surface-muted)] text-[var(--accent)]">
               <UserRound className="h-5 w-5" />
@@ -367,7 +528,7 @@ export function ClientsManager() {
             </div>
           </div>
 
-          <div className="mt-5">{clientFormContent}</div>
+          <div className="mt-5 lg:max-h-[calc(100vh-10rem)]">{clientFormContent}</div>
         </article>
       </section>
     </main>

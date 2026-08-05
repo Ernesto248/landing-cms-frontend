@@ -193,6 +193,13 @@ export function getAdminClients(accessToken: string) {
   });
 }
 
+export function getAdminClientServiceHistory(accessToken: string, clientId: string) {
+  return adminFetch<AppointmentResponse[]>(`/admin/clients/${clientId}/service-history`, {
+    accessToken,
+    method: "GET",
+  });
+}
+
 export function createAdminClient(accessToken: string, body: UpsertClientRequest) {
   return adminFetch<ClientResponse>("/admin/clients", {
     accessToken,
