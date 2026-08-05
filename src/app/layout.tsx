@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sileo";
+import { Analytics } from "@vercel/analytics/next";
 
 import { ThemeProvider } from "@/components/theme-provider";
 
@@ -89,6 +90,7 @@ export default function RootLayout({
       <body className="min-h-full bg-[var(--bg)] text-[var(--text)] antialiased">
         <ThemeProvider>{children}</ThemeProvider>
         <Toaster position="top-right" />
+        <Analytics />
       </body>
     </html>
   );
