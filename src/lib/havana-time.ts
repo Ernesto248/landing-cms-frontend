@@ -99,6 +99,11 @@ export function addMonthsToIsoDate(isoDate: string, amount: number) {
   return formatIsoDateFromUtcDate(new Date(Date.UTC(year, month - 1 + amount, day)));
 }
 
+export function addDaysToIsoDate(isoDate: string, amount: number) {
+  const { year, month, day } = parseIsoDate(isoDate);
+  return formatIsoDateFromUtcDate(new Date(Date.UTC(year, month - 1, day + amount)));
+}
+
 export function getMonthBoundsFromKey(monthValue: string) {
   const [year, month] = monthValue.split("-").map(Number);
   const firstDay = `${year}-${pad2(month)}-01`;

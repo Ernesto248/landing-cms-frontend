@@ -27,7 +27,7 @@ import {
   updateAdminExpense,
 } from "@/lib/api/admin";
 import { ApiError } from "@/lib/api/http";
-import { getHavanaIsoDate } from "@/lib/havana-time";
+import { addDaysToIsoDate, getHavanaIsoDate } from "@/lib/havana-time";
 import { toast } from "@/lib/toast";
 import type {
   CategoryBreakdownResponse,
@@ -52,9 +52,11 @@ function todayString() {
 }
 
 function daysAgo(days: number) {
-  const date = new Date();
-  date.setDate(date.getDate() - days);
-  return date.toISOString().slice(0, 10);
+  return addDaysToIsoDate(todayString(), -days);
+}
+
+function normalizeDateRange(from: string, to: string) {
+  return from <= to ? { from, to } : { from: to, to: from };
 }
 
 function formatCurrency(value: number) {
@@ -78,7 +80,7 @@ function getFilterRange(filter: DateFilter, customFrom: string, customTo: string
     case "month":
       return { from: daysAgo(29), to: today };
     default:
-      return { from: customFrom || today, to: customTo || today };
+      return normalizeDateRange(customFrom || daysAgo(6), customTo || today);
   }
 }
 
@@ -238,7 +240,7 @@ export function FinanceDashboard() {
     setDraft({
       detail: "",
       amount: "0",
-      expenseDate: from,
+      expenseDate: todayString(),
       expenseCategoryId: nextCategoryId,
       notes: "",
     });
@@ -397,13 +399,7 @@ export function FinanceDashboard() {
           <input
             className="mt-2 h-11 w-full rounded-2xl border border-[var(--border-input)] bg-[var(--surface)] px-4 text-sm"
             type="date"
-            min={from}
-            max={to}
-            value={
-              draft.expenseDate < from || draft.expenseDate > to
-                ? from
-                : draft.expenseDate
-            }
+            value={draft.expenseDate || todayString()}
             onChange={(e) => setDraft((c) => ({ ...c, expenseDate: e.target.value }))}
           />
         </label>
