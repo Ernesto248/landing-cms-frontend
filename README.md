@@ -1,36 +1,44 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Jeni's Lashes & Brows — Frontend
 
-## Getting Started
+Frontend for a commercial landing and administration platform for a beauty professional.
 
-First, run the development server:
+## What it delivers
 
-```bash
+- Public landing page with services, gallery, testimonials and contact flows.
+- Admin screens for appointments, clients, services, schedules, content and finance.
+- Responsive layouts for desktop and mobile.
+- Typed API client for authentication, CMS content, appointments and financial summaries.
+- Appointment overlap validation, status management and local demo data for rapid UI iteration.
+- Integration boundary prepared for the companion Spring Boot backend.
+
+The appointment and finance demo views use browser-persisted mock data so the interface can be evaluated without a running backend. Production data access is isolated in src/lib/api.
+
+## Technology
+
+- Next.js 16 App Router
+- React 19 and TypeScript
+- Tailwind CSS 4
+- GSAP and Framer Motion
+- Recharts and Embla Carousel
+- Radix-based UI components
+- Vercel Analytics
+
+## Running locally
+
+~~~bash
+npm ci
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+~~~
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The application is available at http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+To connect the frontend to the Java backend, set API_BASE_URL or NEXT_PUBLIC_API_BASE_URL in .env.local. Without it, the public pages and demo admin flows remain available.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Verification
 
-## Learn More
+~~~bash
+npm run build
+npm run lint
+~~~
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The project includes a flat ESLint configuration and TypeScript validation during the production build.
